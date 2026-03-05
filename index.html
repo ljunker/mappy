@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mappy</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="toolbar">
+      <div class="brand">Mappy</div>
+      <div class="controls">
+        <button id="add-card-btn" class="tool-btn">Karte erstellen</button>
+        <button id="connect-btn" class="tool-btn">Verbinden</button>
+        <button id="delete-edge-btn" class="tool-btn ghost" disabled>Verbindung loeschen</button>
+        <button id="reset-view-btn" class="tool-btn ghost">Ansicht zentrieren</button>
+      </div>
+      <div class="status-wrap">
+        <span id="status-pill" class="status-pill">Modus: Bewegen</span>
+        <span id="zoom-pill" class="zoom-pill">100%</span>
+      </div>
+    </header>
+
+    <main id="viewport" class="viewport" aria-label="Mindmap Canvas">
+      <div id="world" class="world">
+        <svg id="edges-layer" class="edges-layer" aria-hidden="true"></svg>
+        <div id="nodes-layer" class="nodes-layer"></div>
+      </div>
+      <div class="hint">
+        Scrollen: Zoom · Hintergrund ziehen: Pan · + an Karte ziehen: neue verbundene Karte · Verbindung klicken + Entf: loeschen
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
