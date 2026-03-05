@@ -1,5 +1,5 @@
 viewport.addEventListener("pointerdown", (event) => {
-  if (event.target.closest("#card-color-menu")) {
+  if (event.target.closest("#card-color-menu") || event.target.closest("#edge-type-menu")) {
     return;
   }
 
@@ -7,13 +7,6 @@ viewport.addEventListener("pointerdown", (event) => {
   if (!onCard) {
     clearSelectedEdge();
     clearSelectedNode();
-  }
-
-  if (state.mode === "add" && !onCard && event.button === 0) {
-    const pos = screenToWorld(event.clientX, event.clientY);
-    const cardPos = getDropCardPosition(pos.x, pos.y);
-    createCard(cardPos.x, cardPos.y);
-    return;
   }
 
   if (onCard || event.button !== 0) {
@@ -36,6 +29,25 @@ viewport.addEventListener("pointermove", (event) => {
 
 viewport.addEventListener("pointerup", (event) => stopPanning(event.pointerId));
 viewport.addEventListener("pointercancel", (event) => stopPanning(event.pointerId));
+
+viewport.addEventListener("dblclick", (event) => {
+  if (event.button !== 0) {
+    return;
+  }
+  if (
+    event.target.closest(".node-card") ||
+    event.target.closest("#card-color-menu") ||
+    event.target.closest("#text-style-menu") ||
+    event.target.closest("#edge-type-menu")
+  ) {
+    return;
+  }
+
+  event.preventDefault();
+  const pos = screenToWorld(event.clientX, event.clientY);
+  const cardPos = getDropCardPosition(pos.x, pos.y);
+  createCard(cardPos.x, cardPos.y);
+});
 
 viewport.addEventListener(
   "wheel",
@@ -77,6 +89,7 @@ window.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     hideCardColorMenu();
     hideTextStyleMenu();
+    hideEdgeTypeMenu();
     setMode("move");
   }
 });
@@ -88,6 +101,9 @@ window.addEventListener("resize", () => {
     applyCamera();
   }
   hideCardColorMenu();
+  if (state.edgeMenu.open && state.selectedEdgeId) {
+    positionEdgeTypeMenu(state.selectedEdgeId);
+  }
   if (state.textMenu.open && state.textMenu.nodeId) {
     positionTextStyleMenu(state.textMenu.nodeId);
   }
@@ -148,8 +164,38 @@ if (textStyleMenu) {
   });
 }
 
+if (edgeTypeMenu) {
+  edgeTypeMenu.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+  });
+
+  edgeTypeMenu.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+  });
+
+  edgeTypeMenu.addEventListener("click", (event) => {
+    const option = event.target.closest(".edge-type-item");
+    if (!option) {
+      return;
+    }
+    const edgeId = state.edgeMenu.edgeId || state.selectedEdgeId;
+    if (!edgeId || !state.edges.has(edgeId)) {
+      hideEdgeTypeMenu();
+      return;
+    }
+    const nextType = getEdgeType(option.dataset.edgeType);
+    setEdgeType(edgeId, nextType);
+  });
+}
+
 window.addEventListener("pointerdown", (event) => {
-  if (event.target.closest("#card-color-menu") || event.target.closest("#text-style-menu")) {
+  if (
+    event.target.closest("#card-color-menu") ||
+    event.target.closest("#text-style-menu") ||
+    event.target.closest("#edge-type-menu")
+  ) {
     return;
   }
   hideCardColorMenu();
@@ -159,25 +205,9 @@ window.addEventListener("pointerdown", (event) => {
   }
 });
 
-addCardBtn.addEventListener("click", () => {
-  setMode(state.mode === "add" ? "move" : "add");
-});
-
 connectBtn.addEventListener("click", () => {
   setMode(state.mode === "connect" ? "move" : "connect");
 });
-
-if (edgeTypeSelect) {
-  edgeTypeSelect.addEventListener("change", () => {
-    const nextType = getEdgeType(edgeTypeSelect.value);
-    state.currentEdgeType = nextType;
-    syncDraftEdgeStyle();
-    if (state.selectedEdgeId) {
-      setEdgeType(state.selectedEdgeId, nextType);
-    }
-    syncEdgeTypeSelect();
-  });
-}
 
 if (exportDataBtn) {
   exportDataBtn.addEventListener("click", () => {
@@ -229,12 +259,13 @@ if (exportImageBtn) {
   });
 }
 
-if (flipEdgeBtn) {
-  flipEdgeBtn.addEventListener("click", () => {
-    if (!state.selectedEdgeId) {
+if (edgeMenuFlipBtn) {
+  edgeMenuFlipBtn.addEventListener("click", () => {
+    const edgeId = state.edgeMenu.edgeId || state.selectedEdgeId;
+    if (!edgeId || !state.edges.has(edgeId)) {
       return;
     }
-    flipEdgeDirection(state.selectedEdgeId);
+    flipEdgeDirection(edgeId);
   });
 }
 
@@ -256,9 +287,7 @@ edgesLayer.appendChild(draftEdge);
 setMode("move");
 centerView();
 syncDeleteEdgeButton();
-syncFlipEdgeButton();
 syncDraftEdgeStyle();
-syncEdgeTypeSelect();
 renderCardColorPresets();
 
 createCard(WORLD_CENTER - 130, WORLD_CENTER - 100);

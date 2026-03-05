@@ -4,12 +4,9 @@ function setMode(mode) {
     clearConnectSource();
   }
 
-  addCardBtn.classList.toggle("active", mode === "add");
   connectBtn.classList.toggle("active", mode === "connect");
 
-  if (mode === "add") {
-    statusPill.textContent = "Modus: Karte platzieren";
-  } else if (mode === "connect") {
+  if (mode === "connect") {
     statusPill.textContent = "Modus: Verknüpfen";
   } else {
     statusPill.textContent = "Modus: Bewegen";
@@ -216,10 +213,110 @@ function showTextStyleMenu(nodeId) {
   updateTextStyleButtonStates();
 }
 
+function syncEdgeTypeMenuSelection(edgeId) {
+  if (!edgeTypeMenu) {
+    return;
+  }
+  const edge = edgeId ? state.edges.get(edgeId) : null;
+  const type = edge ? getEdgeType(edge.type) : "";
+  const options = edgeTypeMenu.querySelectorAll(".edge-type-item");
+  for (const option of options) {
+    option.classList.toggle("active", option.dataset.edgeType === type);
+  }
+  syncEdgeMenuControls(edgeId);
+}
+
+function syncEdgeMenuControls(edgeId) {
+  if (!edgeMenuFlipBtn) {
+    return;
+  }
+  const edge = edgeId ? state.edges.get(edgeId) : null;
+  edgeMenuFlipBtn.disabled = !edge || !isDirectedType(edge.type);
+}
+
+function getEdgeMenuClientPosition(edgeId) {
+  const edge = state.edges.get(edgeId);
+  if (!edge || typeof getEdgeEndpoints !== "function") {
+    return null;
+  }
+  const points = getEdgeEndpoints(edge);
+  if (!points) {
+    return null;
+  }
+  const midX = (points.a.x + points.b.x) / 2;
+  const midY = (points.a.y + points.b.y) / 2;
+  const viewRect = viewport.getBoundingClientRect();
+  return {
+    x: viewRect.left + midX * state.camera.scale + state.camera.x,
+    y: viewRect.top + midY * state.camera.scale + state.camera.y,
+  };
+}
+
+function hideEdgeTypeMenu() {
+  if (!edgeTypeMenu || !state.edgeMenu.open) {
+    state.edgeMenu.open = false;
+    state.edgeMenu.edgeId = null;
+    return;
+  }
+  edgeTypeMenu.hidden = true;
+  state.edgeMenu.open = false;
+  state.edgeMenu.edgeId = null;
+}
+
+function positionEdgeTypeMenu(edgeId, clientX = null, clientY = null) {
+  if (!edgeTypeMenu || !state.edges.has(edgeId)) {
+    hideEdgeTypeMenu();
+    return;
+  }
+
+  const viewRect = viewport.getBoundingClientRect();
+  const menuPadding = 10;
+  let nextClientX = clientX;
+  let nextClientY = clientY;
+  if (!Number.isFinite(nextClientX) || !Number.isFinite(nextClientY)) {
+    const autoPos = getEdgeMenuClientPosition(edgeId);
+    if (autoPos) {
+      nextClientX = autoPos.x;
+      nextClientY = autoPos.y;
+    } else {
+      nextClientX = viewRect.left + viewRect.width / 2;
+      nextClientY = viewRect.top + viewRect.height / 2;
+    }
+  }
+  const relX = nextClientX - viewRect.left;
+  const relY = nextClientY - viewRect.top;
+
+  edgeTypeMenu.style.left = "0px";
+  edgeTypeMenu.style.top = "0px";
+
+  const menuWidth = edgeTypeMenu.offsetWidth;
+  const menuHeight = edgeTypeMenu.offsetHeight;
+  const maxX = viewRect.width - menuWidth - menuPadding;
+  const maxY = viewRect.height - menuHeight - menuPadding;
+
+  const nextX = clamp(relX + 8, menuPadding, Math.max(menuPadding, maxX));
+  const nextY = clamp(relY + 8, menuPadding, Math.max(menuPadding, maxY));
+
+  edgeTypeMenu.style.left = `${nextX}px`;
+  edgeTypeMenu.style.top = `${nextY}px`;
+  syncEdgeTypeMenuSelection(edgeId);
+}
+
+function showEdgeTypeMenu(edgeId, clientX = null, clientY = null) {
+  if (!edgeTypeMenu || !state.edges.has(edgeId)) {
+    return;
+  }
+  edgeTypeMenu.hidden = false;
+  state.edgeMenu.open = true;
+  state.edgeMenu.edgeId = edgeId;
+  positionEdgeTypeMenu(edgeId, clientX, clientY);
+}
+
 function clearSelectedNode() {
   if (!state.selectedNodeId) {
     hideCardColorMenu();
     hideTextStyleMenu();
+    hideEdgeTypeMenu();
     return;
   }
   const selectedCard = state.nodeElements.get(state.selectedNodeId);
@@ -228,6 +325,7 @@ function clearSelectedNode() {
   }
   hideCardColorMenu();
   hideTextStyleMenu();
+  hideEdgeTypeMenu();
   state.selectedNodeId = null;
 }
 
@@ -256,6 +354,7 @@ function selectNode(nodeId) {
   if (state.selectedEdgeId) {
     clearSelectedEdge();
   }
+  hideEdgeTypeMenu();
   hideCardColorMenu();
   if (state.textMenu.open && state.textMenu.nodeId !== nodeId) {
     hideTextStyleMenu();
@@ -266,32 +365,6 @@ function syncDeleteEdgeButton() {
   deleteEdgeBtn.disabled = !state.selectedEdgeId;
 }
 
-function syncFlipEdgeButton() {
-  if (!flipEdgeBtn) {
-    return;
-  }
-  if (!state.selectedEdgeId) {
-    flipEdgeBtn.disabled = true;
-    return;
-  }
-  const edge = state.edges.get(state.selectedEdgeId);
-  flipEdgeBtn.disabled = !edge || !isDirectedType(edge.type);
-}
-
-function syncEdgeTypeSelect() {
-  if (!edgeTypeSelect) {
-    return;
-  }
-  if (state.selectedEdgeId) {
-    const edge = state.edges.get(state.selectedEdgeId);
-    if (edge) {
-      edgeTypeSelect.value = getEdgeType(edge.type);
-      return;
-    }
-  }
-  edgeTypeSelect.value = getEdgeType(state.currentEdgeType);
-}
-
 function setEdgeType(edgeId, edgeType) {
   const edge = state.edges.get(edgeId);
   if (!edge) {
@@ -300,33 +373,38 @@ function setEdgeType(edgeId, edgeType) {
   edge.type = getEdgeType(edgeType);
   refreshEdgeAppearance(edgeId);
   if (state.selectedEdgeId === edgeId) {
-    syncFlipEdgeButton();
+    state.currentEdgeType = getEdgeType(edge.type);
+    syncDraftEdgeStyle();
+  }
+  if (state.edgeMenu.open && state.edgeMenu.edgeId === edgeId) {
+    positionEdgeTypeMenu(edgeId);
   }
 }
 
 function clearSelectedEdge() {
   if (!state.selectedEdgeId) {
     syncDeleteEdgeButton();
-    syncFlipEdgeButton();
-    syncEdgeTypeSelect();
+    hideEdgeTypeMenu();
     return;
   }
   const prevSelectedId = state.selectedEdgeId;
   state.selectedEdgeId = null;
   refreshEdgeAppearance(prevSelectedId);
+  hideEdgeTypeMenu();
   syncDeleteEdgeButton();
-  syncFlipEdgeButton();
-  syncEdgeTypeSelect();
 }
 
-function selectEdge(edgeId) {
+function selectEdge(edgeId, menuClientX = null, menuClientY = null) {
   if (!state.edgeElements.has(edgeId) || !state.edges.has(edgeId)) {
     return;
   }
   if (state.selectedEdgeId === edgeId) {
+    if (state.edgeMenu.open) {
+      positionEdgeTypeMenu(edgeId, menuClientX, menuClientY);
+    } else {
+      showEdgeTypeMenu(edgeId, menuClientX, menuClientY);
+    }
     syncDeleteEdgeButton();
-    syncFlipEdgeButton();
-    syncEdgeTypeSelect();
     return;
   }
   if (state.selectedNodeId) {
@@ -344,7 +422,6 @@ function selectEdge(edgeId) {
     state.currentEdgeType = getEdgeType(edge.type);
   }
   syncDeleteEdgeButton();
-  syncFlipEdgeButton();
-  syncEdgeTypeSelect();
+  syncDraftEdgeStyle();
+  showEdgeTypeMenu(edgeId, menuClientX, menuClientY);
 }
-

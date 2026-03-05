@@ -52,33 +52,6 @@ body {
   flex-wrap: wrap;
 }
 
-.edge-type-wrap {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid #d1d9e4;
-  background: #fff;
-  border-radius: 10px;
-  padding: 7px 9px;
-  font-size: 13px;
-  color: #44515f;
-}
-
-.edge-type-select {
-  border: 1px solid #d1d9e4;
-  border-radius: 7px;
-  padding: 4px 7px;
-  font-size: 13px;
-  background: #fff;
-  color: #213547;
-  min-width: 170px;
-}
-
-.edge-type-select:focus-visible {
-  outline: 2px solid rgba(15, 118, 110, 0.25);
-  outline-offset: 1px;
-}
-
 .tool-btn {
   border: 1px solid #d1d9e4;
   background: #fff;
@@ -210,6 +183,84 @@ body {
 
 .text-style-menu[hidden] {
   display: none;
+}
+
+.edge-type-menu {
+  position: absolute;
+  z-index: 8;
+  min-width: 190px;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid #d8e0eb;
+  border-radius: 12px;
+  box-shadow: 0 14px 28px rgba(27, 43, 63, 0.16);
+  padding: 8px;
+}
+
+.edge-type-menu[hidden] {
+  display: none;
+}
+
+.edge-type-title {
+  font-size: 12px;
+  color: #5a687a;
+  margin: 2px 4px 8px;
+}
+
+.edge-type-options {
+  display: grid;
+  gap: 4px;
+}
+
+.edge-type-item {
+  border: 1px solid transparent;
+  background: transparent;
+  color: #334155;
+  border-radius: 8px;
+  font-size: 13px;
+  text-align: left;
+  padding: 7px 9px;
+  cursor: pointer;
+}
+
+.edge-type-item:hover {
+  background: #eef4ff;
+}
+
+.edge-type-item.active {
+  border-color: #b7c8e6;
+  background: #e7f0ff;
+  color: #1e3a8a;
+}
+
+.edge-type-sep {
+  height: 1px;
+  background: #dbe3ef;
+  margin: 8px 2px 6px;
+}
+
+.edge-menu-action {
+  width: 100%;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #334155;
+  border-radius: 8px;
+  font-size: 13px;
+  text-align: left;
+  padding: 7px 9px;
+  cursor: pointer;
+}
+
+.edge-menu-action:hover {
+  background: #eef4ff;
+}
+
+.edge-menu-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.edge-menu-action:disabled:hover {
+  background: transparent;
 }
 
 .text-style-btn {
@@ -401,6 +452,17 @@ body {
 }
 
 .quick-add-btn:hover {
+  color: #0f766e;
+  background: #dff7f4;
+}
+
+.connect-drag-btn {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+
+.connect-drag-btn:hover {
   color: #0f766e;
   background: #dff7f4;
 }

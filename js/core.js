@@ -18,17 +18,16 @@ const viewport = document.getElementById("viewport");
 const world = document.getElementById("world");
 const nodesLayer = document.getElementById("nodes-layer");
 const edgesLayer = document.getElementById("edges-layer");
-const addCardBtn = document.getElementById("add-card-btn");
 const connectBtn = document.getElementById("connect-btn");
 const cardColorMenu = document.getElementById("card-color-menu");
 const cardColorPresets = document.getElementById("card-color-presets");
 const textStyleMenu = document.getElementById("text-style-menu");
-const edgeTypeSelect = document.getElementById("edge-type-select");
+const edgeTypeMenu = document.getElementById("edge-type-menu");
+const edgeMenuFlipBtn = document.getElementById("edge-menu-flip-btn");
 const exportDataBtn = document.getElementById("export-data-btn");
 const importDataBtn = document.getElementById("import-data-btn");
 const exportImageBtn = document.getElementById("export-image-btn");
 const importFileInput = document.getElementById("import-file-input");
-const flipEdgeBtn = document.getElementById("flip-edge-btn");
 const deleteEdgeBtn = document.getElementById("delete-edge-btn");
 const resetViewBtn = document.getElementById("reset-view-btn");
 const statusPill = document.getElementById("status-pill");
@@ -91,6 +90,10 @@ const state = {
   textMenu: {
     open: false,
     nodeId: null,
+  },
+  edgeMenu: {
+    open: false,
+    edgeId: null,
   },
 };
 
@@ -190,4 +193,3 @@ function refreshEdgeAppearance(edgeId) {
   }
   applyEdgeTypeToLine(line, edge.type, state.selectedEdgeId === edgeId);
 }
-

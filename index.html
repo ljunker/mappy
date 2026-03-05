@@ -11,22 +11,11 @@
     <header class="toolbar">
       <div class="brand">Mappy</div>
       <div class="controls">
-        <button id="add-card-btn" class="tool-btn">Karte erstellen</button>
         <button id="connect-btn" class="tool-btn">Verbinden</button>
-        <label class="edge-type-wrap" for="edge-type-select">
-          Verbindung:
-          <select id="edge-type-select" class="edge-type-select">
-            <option value="solid">durchgezogen</option>
-            <option value="dashed">gestrichelt</option>
-            <option value="directed">gerichtet</option>
-            <option value="directed-dashed">gerichtet + gestrichelt</option>
-          </select>
-        </label>
         <button id="export-data-btn" class="tool-btn ghost">Daten exportieren</button>
         <button id="import-data-btn" class="tool-btn ghost">Daten importieren</button>
         <button id="export-image-btn" class="tool-btn ghost">Bild exportieren</button>
         <input id="import-file-input" type="file" accept=".json,application/json" hidden />
-        <button id="flip-edge-btn" class="tool-btn ghost" disabled>Richtung umdrehen</button>
         <button id="delete-edge-btn" class="tool-btn ghost" disabled>Verbindung löschen</button>
         <button id="reset-view-btn" class="tool-btn ghost">Ansicht zentrieren</button>
       </div>
@@ -54,8 +43,19 @@
         <button type="button" class="text-style-btn" data-cmd="justifyCenter" title="Zentriert">C</button>
         <button type="button" class="text-style-btn" data-cmd="justifyRight" title="Rechtsbündig">R</button>
       </div>
+      <div id="edge-type-menu" class="edge-type-menu" hidden>
+        <div class="edge-type-title">Verbindungstyp</div>
+        <div class="edge-type-options">
+          <button type="button" class="edge-type-item" data-edge-type="solid">durchgezogen</button>
+          <button type="button" class="edge-type-item" data-edge-type="dashed">gestrichelt</button>
+          <button type="button" class="edge-type-item" data-edge-type="directed">gerichtet</button>
+          <button type="button" class="edge-type-item" data-edge-type="directed-dashed">gerichtet + gestrichelt</button>
+        </div>
+        <div class="edge-type-sep"></div>
+        <button type="button" id="edge-menu-flip-btn" class="edge-menu-action">Richtung umdrehen</button>
+      </div>
       <div class="hint">
-        Scrollen: Zoom · Hintergrund ziehen: Pan · Text klicken: bearbeiten + Stilmenü · Rechtsklick: Farbe · Ecke ziehen: Größe · Export/Import oben
+        Scrollen: Zoom · Doppelklick Canvas: neue Karte · Hintergrund ziehen: Pan · Text klicken: bearbeiten + Stilmenü · Rechtsklick Karte: Farbe · Verbindung anklicken: Verbindungsmenü · `->` auf Karte ziehen: verbinden · Ecke ziehen: Größe · Export/Import oben
       </div>
     </main>
   </div>

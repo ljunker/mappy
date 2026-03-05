@@ -1,6 +1,7 @@
 function clearBoard() {
   hideCardColorMenu();
   hideTextStyleMenu();
+  hideEdgeTypeMenu();
   clearConnectSource();
   clearSelectedEdge();
   clearSelectedNode();
@@ -152,7 +153,6 @@ function importSnapshot(snapshot) {
   setMode("move");
   applyCamera();
   updateAllEdges();
-  syncEdgeTypeSelect();
   syncDraftEdgeStyle();
 }
 
@@ -372,4 +372,3 @@ function exportAsImage() {
     downloadBlob(`mappy-bild-${getFileTimestamp()}.png`, blob);
   }, "image/png");
 }
-

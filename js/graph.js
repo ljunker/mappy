@@ -5,6 +5,9 @@ function applyCamera() {
   if (state.textMenu.open && state.textMenu.nodeId) {
     positionTextStyleMenu(state.textMenu.nodeId);
   }
+  if (state.edgeMenu.open && state.selectedEdgeId) {
+    positionEdgeTypeMenu(state.selectedEdgeId);
+  }
 }
 
 function centerView() {
@@ -118,6 +121,12 @@ function createCard(x, y, options = {}) {
   const actions = document.createElement("div");
   actions.className = "node-actions";
 
+  const connectDragBtn = document.createElement("button");
+  connectDragBtn.className = "node-action-btn connect-drag-btn";
+  connectDragBtn.type = "button";
+  connectDragBtn.title = "Auf Karte ziehen zum Verbinden";
+  connectDragBtn.textContent = "->";
+
   const quickAddBtn = document.createElement("button");
   quickAddBtn.className = "node-action-btn quick-add-btn";
   quickAddBtn.type = "button";
@@ -130,7 +139,7 @@ function createCard(x, y, options = {}) {
   deleteBtn.title = "Karte löschen";
   deleteBtn.textContent = "x";
 
-  actions.append(quickAddBtn, deleteBtn);
+  actions.append(connectDragBtn, quickAddBtn, deleteBtn);
 
   const content = document.createElement("div");
   content.className = "node-content";
@@ -288,6 +297,10 @@ function createCard(x, y, options = {}) {
     startQuickCreateDrag(event, id, quickAddBtn);
   });
 
+  connectDragBtn.addEventListener("pointerdown", (event) => {
+    startConnectToCardDrag(event, id, connectDragBtn);
+  });
+
   resizeHandle.addEventListener("pointerdown", (event) => {
     if (event.button !== 0) {
       return;
@@ -362,6 +375,9 @@ function removeNode(nodeId) {
 }
 
 function removeEdge(edgeId) {
+  if (state.edgeMenu.open && state.edgeMenu.edgeId === edgeId) {
+    hideEdgeTypeMenu();
+  }
   if (state.selectedEdgeId === edgeId) {
     state.selectedEdgeId = null;
   }
@@ -377,8 +393,6 @@ function removeEdge(edgeId) {
   state.edgeHitElements.delete(edgeId);
   state.edges.delete(edgeId);
   syncDeleteEdgeButton();
-  syncFlipEdgeButton();
-  syncEdgeTypeSelect();
 }
 
 function edgeExists(from, to, edgeType = state.currentEdgeType, excludedEdgeId = null) {
@@ -426,7 +440,13 @@ function flipEdgeDirection(edgeId) {
   edge.to = nextTo;
   updateEdgePosition(edge);
   refreshEdgeAppearance(edgeId);
-  syncFlipEdgeButton();
+  if (state.selectedEdgeId === edgeId) {
+    state.currentEdgeType = getEdgeType(edge.type);
+    syncDraftEdgeStyle();
+  }
+  if (state.edgeMenu.open && state.edgeMenu.edgeId === edgeId) {
+    positionEdgeTypeMenu(edgeId);
+  }
   return true;
 }
 
@@ -454,6 +474,11 @@ function createEdge(fromId, toId, edgeType = state.currentEdgeType, options = {}
     event.preventDefault();
     event.stopPropagation();
     selectEdge(edgeId);
+  });
+  hitLine.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    selectEdge(edgeId, event.clientX, event.clientY);
   });
 
   const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
@@ -552,6 +577,9 @@ function updateEdgePosition(edge) {
     hitLine.setAttribute("x2", String(b.x));
     hitLine.setAttribute("y2", String(b.y));
   }
+  if (state.edgeMenu.open && state.edgeMenu.edgeId === edge.id) {
+    positionEdgeTypeMenu(edge.id);
+  }
 }
 
 function updateAllEdges() {
@@ -619,6 +647,85 @@ function updateDraftEdge(sourceNodeId, clientX, clientY) {
   draftEdge.setAttribute("y1", String(sourceCenter.y));
   draftEdge.setAttribute("x2", String(target.x));
   draftEdge.setAttribute("y2", String(target.y));
+}
+
+function getNodeIdAtClient(clientX, clientY, excludedNodeId = null) {
+  const targetEl = document.elementFromPoint(clientX, clientY);
+  if (!targetEl) {
+    return null;
+  }
+  const card = targetEl.closest(".node-card");
+  const nodeId = card?.dataset?.nodeId || null;
+  if (!nodeId || !state.nodes.has(nodeId) || nodeId === excludedNodeId) {
+    return null;
+  }
+  return nodeId;
+}
+
+function startConnectToCardDrag(event, sourceNodeId, connectDragBtn) {
+  if (event.button !== 0) {
+    return;
+  }
+  if (!state.nodes.has(sourceNodeId)) {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+  selectNode(sourceNodeId);
+  clearSelectedEdge();
+  clearConnectSource();
+
+  const pointerId = event.pointerId;
+  const startClientX = event.clientX;
+  const startClientY = event.clientY;
+
+  connectDragBtn.setPointerCapture(pointerId);
+  syncDraftEdgeStyle();
+  setDraftEdgeVisible(true);
+  updateDraftEdge(sourceNodeId, event.clientX, event.clientY);
+
+  const onMove = (moveEvent) => {
+    if (moveEvent.pointerId !== pointerId) {
+      return;
+    }
+    updateDraftEdge(sourceNodeId, moveEvent.clientX, moveEvent.clientY);
+  };
+
+  const finish = (endEvent, cancelled) => {
+    if (endEvent.pointerId !== pointerId) {
+      return;
+    }
+    if (connectDragBtn.hasPointerCapture(pointerId)) {
+      connectDragBtn.releasePointerCapture(pointerId);
+    }
+    connectDragBtn.removeEventListener("pointermove", onMove);
+    connectDragBtn.removeEventListener("pointerup", onUp);
+    connectDragBtn.removeEventListener("pointercancel", onCancel);
+
+    setDraftEdgeVisible(false);
+
+    const dragDistance = Math.hypot(endEvent.clientX - startClientX, endEvent.clientY - startClientY);
+    if (cancelled || dragDistance < QUICK_CREATE_MIN_DRAG) {
+      return;
+    }
+    if (!state.nodes.has(sourceNodeId)) {
+      return;
+    }
+
+    const targetNodeId = getNodeIdAtClient(endEvent.clientX, endEvent.clientY, sourceNodeId);
+    if (!targetNodeId) {
+      return;
+    }
+    createEdge(sourceNodeId, targetNodeId);
+  };
+
+  const onUp = (upEvent) => finish(upEvent, false);
+  const onCancel = (cancelEvent) => finish(cancelEvent, true);
+
+  connectDragBtn.addEventListener("pointermove", onMove);
+  connectDragBtn.addEventListener("pointerup", onUp);
+  connectDragBtn.addEventListener("pointercancel", onCancel);
 }
 
 function startQuickCreateDrag(event, sourceNodeId, quickAddBtn) {

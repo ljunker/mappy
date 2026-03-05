@@ -18,18 +18,18 @@ Mappy ist ein leichtgewichtiges Web-Projekt für Mindmaps und freie Diagramme au
 
 - Hintergrund ziehen: Canvas bewegen (Pan)
 - Mausrad: Zoom
-- `Karte erstellen`: Modus aktivieren und auf den Canvas klicken
+- Doppelklick auf den Canvas: sofort neue Karte an der Mausposition erstellen
 - Karte klicken: Text direkt bearbeiten (zentriert)
 - Beim Editieren erscheint über der Karte ein kleines Text-Stilmenü (`B`, `I`, `U`, links/zentriert/rechts)
 - Karte ziehen (Drag & Drop): Karte verschieben
 - Karte unten rechts am Handle ziehen: Größe ändern
 - Rechtsklick auf Karte: Farb-Kontextmenü mit Preset-Farben
-- Verbindungstyp in der Toolbar wählen
 - `Verbinden`: erste Karte klicken, dann zweite Karte klicken (mit gewähltem Typ)
+- `->` an einer Karte ziehen und auf einer anderen Karte loslassen: direkte Verbindung erstellen
 - `+` an einer Karte ziehen und loslassen: neue verbundene Karte erstellen
-- Verbindung anklicken: Verbindung auswählen
-- Verbindungstyp während Auswahl ändern: Dropdown in der Toolbar
-- `Richtung umdrehen`: ausgewählte gerichtete Verbindung invertieren
+- Verbindung anklicken: Verbindung auswählen und Verbindungsmenü anzeigen
+- Verbindungsmenü bleibt sichtbar, solange die Verbindung ausgewählt ist
+- Im Verbindungsmenü: Verbindungstyp ändern oder Richtung umdrehen
 - `Entf` oder `Backspace`: ausgewählte Verbindung löschen
 - `Daten exportieren`: aktuelles Board als JSON-Datei speichern
 - `Daten importieren`: JSON-Datei laden und Board-Zustand wiederherstellen
@@ -42,7 +42,7 @@ Mappy ist ein leichtgewichtiges Web-Projekt für Mindmaps und freie Diagramme au
 - `index.html`: Layout, Toolbar und Script-Einbindung
 - `styles.css`: UI-Styles, Canvas und Karten-Design
 - `js/core.js`: Konstanten, DOM-Referenzen, globaler Zustand, Basis-Utilities
-- `js/ui.js`: UI- und Auswahl-Logik (Modi, Menüs, Edge-Toolbar-Sync)
+- `js/ui.js`: UI- und Auswahl-Logik (Modi, Menüs, Verbindungsmenü)
 - `js/graph.js`: Karten-/Verbindungslogik, Geometrie, Quick-Create, Pan/Zoom-Helfer
 - `js/io.js`: Import/Export (JSON + PNG)
 - `js/events.js`: Event-Listener und App-Initialisierung
