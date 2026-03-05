@@ -39,9 +39,13 @@ Mappy ist ein leichtgewichtiges Web-Projekt für Mindmaps und freie Diagramme au
 
 ## Projektstruktur
 
-- `index.html`: Layout und Toolbar
+- `index.html`: Layout, Toolbar und Script-Einbindung
 - `styles.css`: UI-Styles, Canvas und Karten-Design
-- `app.js`: Interaktionslogik (Pan/Zoom/Karten/Verbindungen)
+- `js/core.js`: Konstanten, DOM-Referenzen, globaler Zustand, Basis-Utilities
+- `js/ui.js`: UI- und Auswahl-Logik (Modi, Menüs, Edge-Toolbar-Sync)
+- `js/graph.js`: Karten-/Verbindungslogik, Geometrie, Quick-Create, Pan/Zoom-Helfer
+- `js/io.js`: Import/Export (JSON + PNG)
+- `js/events.js`: Event-Listener und App-Initialisierung
 
 ## Lokal starten
 
