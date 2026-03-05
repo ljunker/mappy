@@ -9,7 +9,7 @@ Mappy ist ein leichtgewichtiges Web-Projekt für Mindmaps und freie Diagramme au
 - Kartentext standardmäßig zentriert
 - Kartengröße pro Karte per Ziehen ändern und Kartenfarbe per Kontextmenü wählen
 - Karten mit verschiedenen Verbindungstypen verbinden (durchgezogen, gestrichelt, gerichtet, gerichtet + gestrichelt)
-- Verbindung auswählen und löschen (Button oder `Entf` / `Backspace`)
+- Verbindung auswählen, Richtung umdrehen und löschen
 - Neue, direkt verbundene Karte per Drag vom `+`-Handle einer bestehenden Karte
 - Daten-Export/Import als JSON (inkl. Kartenposition, Größe, Farbe, Text/Formatierung, Verbindungen, Kamera)
 - Bild-Export als PNG aus dem belegten Board-Bereich
@@ -29,6 +29,7 @@ Mappy ist ein leichtgewichtiges Web-Projekt für Mindmaps und freie Diagramme au
 - `+` an einer Karte ziehen und loslassen: neue verbundene Karte erstellen
 - Verbindung anklicken: Verbindung auswählen
 - Verbindungstyp während Auswahl ändern: Dropdown in der Toolbar
+- `Richtung umdrehen`: ausgewählte gerichtete Verbindung invertieren
 - `Entf` oder `Backspace`: ausgewählte Verbindung löschen
 - `Daten exportieren`: aktuelles Board als JSON-Datei speichern
 - `Daten importieren`: JSON-Datei laden und Board-Zustand wiederherstellen

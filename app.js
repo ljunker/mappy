@@ -28,6 +28,7 @@ const exportDataBtn = document.getElementById("export-data-btn");
 const importDataBtn = document.getElementById("import-data-btn");
 const exportImageBtn = document.getElementById("export-image-btn");
 const importFileInput = document.getElementById("import-file-input");
+const flipEdgeBtn = document.getElementById("flip-edge-btn");
 const deleteEdgeBtn = document.getElementById("delete-edge-btn");
 const resetViewBtn = document.getElementById("reset-view-btn");
 const statusPill = document.getElementById("status-pill");
@@ -458,6 +459,18 @@ function syncDeleteEdgeButton() {
   deleteEdgeBtn.disabled = !state.selectedEdgeId;
 }
 
+function syncFlipEdgeButton() {
+  if (!flipEdgeBtn) {
+    return;
+  }
+  if (!state.selectedEdgeId) {
+    flipEdgeBtn.disabled = true;
+    return;
+  }
+  const edge = state.edges.get(state.selectedEdgeId);
+  flipEdgeBtn.disabled = !edge || !isDirectedType(edge.type);
+}
+
 function syncEdgeTypeSelect() {
   if (!edgeTypeSelect) {
     return;
@@ -479,11 +492,15 @@ function setEdgeType(edgeId, edgeType) {
   }
   edge.type = getEdgeType(edgeType);
   refreshEdgeAppearance(edgeId);
+  if (state.selectedEdgeId === edgeId) {
+    syncFlipEdgeButton();
+  }
 }
 
 function clearSelectedEdge() {
   if (!state.selectedEdgeId) {
     syncDeleteEdgeButton();
+    syncFlipEdgeButton();
     syncEdgeTypeSelect();
     return;
   }
@@ -491,6 +508,7 @@ function clearSelectedEdge() {
   state.selectedEdgeId = null;
   refreshEdgeAppearance(prevSelectedId);
   syncDeleteEdgeButton();
+  syncFlipEdgeButton();
   syncEdgeTypeSelect();
 }
 
@@ -500,6 +518,7 @@ function selectEdge(edgeId) {
   }
   if (state.selectedEdgeId === edgeId) {
     syncDeleteEdgeButton();
+    syncFlipEdgeButton();
     syncEdgeTypeSelect();
     return;
   }
@@ -518,6 +537,7 @@ function selectEdge(edgeId) {
     state.currentEdgeType = getEdgeType(edge.type);
   }
   syncDeleteEdgeButton();
+  syncFlipEdgeButton();
   syncEdgeTypeSelect();
 }
 
@@ -900,12 +920,16 @@ function removeEdge(edgeId) {
   state.edgeHitElements.delete(edgeId);
   state.edges.delete(edgeId);
   syncDeleteEdgeButton();
+  syncFlipEdgeButton();
   syncEdgeTypeSelect();
 }
 
-function edgeExists(from, to, edgeType = state.currentEdgeType) {
+function edgeExists(from, to, edgeType = state.currentEdgeType, excludedEdgeId = null) {
   const newDirected = isDirectedType(edgeType);
   for (const edge of state.edges.values()) {
+    if (excludedEdgeId && edge.id === excludedEdgeId) {
+      continue;
+    }
     const sameDirection = edge.from === from && edge.to === to;
     const reverseDirection = edge.from === to && edge.to === from;
     const existingDirected = isDirectedType(edge.type);
@@ -926,6 +950,27 @@ function edgeExists(from, to, edgeType = state.currentEdgeType) {
     }
   }
   return false;
+}
+
+function flipEdgeDirection(edgeId) {
+  const edge = state.edges.get(edgeId);
+  if (!edge || !isDirectedType(edge.type)) {
+    return false;
+  }
+
+  const nextFrom = edge.to;
+  const nextTo = edge.from;
+  if (edgeExists(nextFrom, nextTo, edge.type, edge.id)) {
+    alert("Diese Richtung existiert bereits.");
+    return false;
+  }
+
+  edge.from = nextFrom;
+  edge.to = nextTo;
+  updateEdgePosition(edge);
+  refreshEdgeAppearance(edgeId);
+  syncFlipEdgeButton();
+  return true;
 }
 
 function createEdge(fromId, toId, edgeType = state.currentEdgeType, options = {}) {
@@ -1823,6 +1868,15 @@ if (exportImageBtn) {
   });
 }
 
+if (flipEdgeBtn) {
+  flipEdgeBtn.addEventListener("click", () => {
+    if (!state.selectedEdgeId) {
+      return;
+    }
+    flipEdgeDirection(state.selectedEdgeId);
+  });
+}
+
 deleteEdgeBtn.addEventListener("click", () => {
   if (!state.selectedEdgeId) {
     return;
@@ -1841,6 +1895,7 @@ edgesLayer.appendChild(draftEdge);
 setMode("move");
 centerView();
 syncDeleteEdgeButton();
+syncFlipEdgeButton();
 syncDraftEdgeStyle();
 syncEdgeTypeSelect();
 renderCardColorPresets();
