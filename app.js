@@ -4,6 +4,11 @@ const MIN_SCALE = 0.35;
 const MAX_SCALE = 2.4;
 const DEFAULT_CARD_WIDTH = 240;
 const DEFAULT_CARD_HEIGHT = 130;
+const DEFAULT_CARD_COLOR = "#ffffff";
+const CARD_MIN_WIDTH = 140;
+const CARD_MAX_WIDTH = 700;
+const CARD_MIN_HEIGHT = 100;
+const CARD_MAX_HEIGHT = 560;
 const QUICK_CREATE_MIN_DRAG = 10;
 
 const viewport = document.getElementById("viewport");
@@ -12,15 +17,46 @@ const nodesLayer = document.getElementById("nodes-layer");
 const edgesLayer = document.getElementById("edges-layer");
 const addCardBtn = document.getElementById("add-card-btn");
 const connectBtn = document.getElementById("connect-btn");
+const cardColorMenu = document.getElementById("card-color-menu");
+const cardColorPresets = document.getElementById("card-color-presets");
+const textStyleMenu = document.getElementById("text-style-menu");
+const edgeTypeSelect = document.getElementById("edge-type-select");
 const deleteEdgeBtn = document.getElementById("delete-edge-btn");
 const resetViewBtn = document.getElementById("reset-view-btn");
 const statusPill = document.getElementById("status-pill");
 const zoomPill = document.getElementById("zoom-pill");
 
+const EDGE_TYPES = {
+  solid: { dashed: false, directed: false },
+  dashed: { dashed: true, directed: false },
+  directed: { dashed: false, directed: true },
+  "directed-dashed": { dashed: true, directed: true },
+};
+const DEFAULT_EDGE_TYPE = "solid";
+const CARD_COLOR_PRESETS = [
+  "#ffffff",
+  "#fef3c7",
+  "#fde68a",
+  "#fee2e2",
+  "#fecdd3",
+  "#fce7f3",
+  "#ede9fe",
+  "#e0e7ff",
+  "#dbeafe",
+  "#cffafe",
+  "#ccfbf1",
+  "#dcfce7",
+  "#d1fae5",
+  "#f1f5f9",
+  "#e5e7eb",
+];
+
 const state = {
   mode: "move",
+  selectedNodeId: null,
   connectSourceId: null,
   selectedEdgeId: null,
+  currentEdgeType: DEFAULT_EDGE_TYPE,
   quickCreate: {
     active: false,
     pointerId: null,
@@ -36,16 +72,106 @@ const state = {
   nextEdgeId: 1,
   nodes: new Map(),
   nodeElements: new Map(),
+  nodeContentElements: new Map(),
   edges: new Map(),
   edgeElements: new Map(),
   edgeHitElements: new Map(),
+  colorMenu: {
+    open: false,
+    nodeId: null,
+  },
+  textMenu: {
+    open: false,
+    nodeId: null,
+  },
 };
+
+function createEdgeMarker(id, color) {
+  const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
+  marker.setAttribute("id", id);
+  marker.setAttribute("viewBox", "0 0 8 8");
+  marker.setAttribute("refX", "7.5");
+  marker.setAttribute("refY", "4");
+  marker.setAttribute("markerWidth", "6");
+  marker.setAttribute("markerHeight", "6");
+  marker.setAttribute("markerUnits", "userSpaceOnUse");
+  marker.setAttribute("orient", "auto");
+
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", "M 0 0 L 8 4 L 0 8 z");
+  path.setAttribute("fill", color);
+  marker.appendChild(path);
+
+  return marker;
+}
+
+const edgeDefs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+edgeDefs.appendChild(createEdgeMarker("edge-arrow", "#56708f"));
+edgeDefs.appendChild(createEdgeMarker("edge-arrow-selected", "#dc2626"));
+edgeDefs.appendChild(createEdgeMarker("edge-arrow-draft", "#0f766e"));
 
 const draftEdge = document.createElementNS("http://www.w3.org/2000/svg", "line");
 draftEdge.classList.add("edge-draft");
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+function sanitizeCardDimension(value, min, max, fallback) {
+  const next = Number(value);
+  if (!Number.isFinite(next)) {
+    return fallback;
+  }
+  return Math.round(clamp(next, min, max));
+}
+
+function normalizeCardColor(value, fallback = DEFAULT_CARD_COLOR) {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+  const lowered = value.trim().toLowerCase();
+  if (/^#[0-9a-f]{6}$/.test(lowered)) {
+    return lowered;
+  }
+  return fallback;
+}
+
+function getEdgeType(type) {
+  return EDGE_TYPES[type] ? type : DEFAULT_EDGE_TYPE;
+}
+
+function isDirectedType(type) {
+  return EDGE_TYPES[getEdgeType(type)].directed;
+}
+
+function isDashedType(type) {
+  return EDGE_TYPES[getEdgeType(type)].dashed;
+}
+
+function applyEdgeTypeToLine(line, edgeType, isSelected) {
+  const normalizedType = getEdgeType(edgeType);
+  const dashed = isDashedType(normalizedType);
+  const directed = isDirectedType(normalizedType);
+
+  line.classList.toggle("selected", isSelected);
+  line.classList.toggle("is-dashed", dashed);
+
+  if (!directed) {
+    line.removeAttribute("marker-end");
+    return;
+  }
+
+  const markerId = isSelected ? "edge-arrow-selected" : "edge-arrow";
+  line.setAttribute("marker-end", `url(#${markerId})`);
+}
+
+function refreshEdgeAppearance(edgeId) {
+  const edge = state.edges.get(edgeId);
+  const line = state.edgeElements.get(edgeId);
+  if (!edge || !line) {
+    return;
+  }
+  applyEdgeTypeToLine(line, edge.type, state.selectedEdgeId === edgeId);
 }
 
 function setMode(mode) {
@@ -60,7 +186,7 @@ function setMode(mode) {
   if (mode === "add") {
     statusPill.textContent = "Modus: Karte platzieren";
   } else if (mode === "connect") {
-    statusPill.textContent = "Modus: Verknuepfen";
+    statusPill.textContent = "Modus: Verknüpfen";
   } else {
     statusPill.textContent = "Modus: Bewegen";
   }
@@ -70,44 +196,322 @@ function setZoomLabel() {
   zoomPill.textContent = `${Math.round(state.camera.scale * 100)}%`;
 }
 
+function applyNodeAppearance(nodeId) {
+  const node = state.nodes.get(nodeId);
+  const card = state.nodeElements.get(nodeId);
+  if (!node || !card) {
+    return;
+  }
+  card.style.width = `${node.width}px`;
+  card.style.height = `${node.height}px`;
+  card.style.backgroundColor = node.color;
+  updateEdgePositionsForNode(nodeId);
+  if (state.textMenu.open && state.textMenu.nodeId === nodeId) {
+    positionTextStyleMenu(nodeId);
+  }
+}
+
+function renderCardColorPresets() {
+  if (!cardColorPresets) {
+    return;
+  }
+  cardColorPresets.innerHTML = "";
+  for (const color of CARD_COLOR_PRESETS) {
+    const swatch = document.createElement("button");
+    swatch.type = "button";
+    swatch.className = "card-color-swatch";
+    swatch.title = color;
+    swatch.dataset.color = color;
+    swatch.style.backgroundColor = color;
+    cardColorPresets.appendChild(swatch);
+  }
+}
+
+function syncCardColorMenuSelection(nodeId) {
+  if (!cardColorPresets) {
+    return;
+  }
+  const node = nodeId ? state.nodes.get(nodeId) : null;
+  const color = node ? normalizeCardColor(node.color) : "";
+  const swatches = cardColorPresets.querySelectorAll(".card-color-swatch");
+  for (const swatch of swatches) {
+    swatch.classList.toggle("active", swatch.dataset.color === color);
+  }
+}
+
+function hideCardColorMenu() {
+  if (!cardColorMenu || !state.colorMenu.open) {
+    state.colorMenu.open = false;
+    state.colorMenu.nodeId = null;
+    return;
+  }
+  cardColorMenu.hidden = true;
+  state.colorMenu.open = false;
+  state.colorMenu.nodeId = null;
+}
+
+function showCardColorMenu(nodeId, clientX, clientY) {
+  if (!cardColorMenu || !state.nodes.has(nodeId)) {
+    return;
+  }
+  const viewRect = viewport.getBoundingClientRect();
+  const menuPadding = 10;
+  const relX = clientX - viewRect.left;
+  const relY = clientY - viewRect.top;
+
+  cardColorMenu.hidden = false;
+  cardColorMenu.style.left = "0px";
+  cardColorMenu.style.top = "0px";
+
+  const menuWidth = cardColorMenu.offsetWidth;
+  const menuHeight = cardColorMenu.offsetHeight;
+  const maxX = viewRect.width - menuWidth - menuPadding;
+  const maxY = viewRect.height - menuHeight - menuPadding;
+
+  const nextX = clamp(relX + 8, menuPadding, Math.max(menuPadding, maxX));
+  const nextY = clamp(relY + 8, menuPadding, Math.max(menuPadding, maxY));
+
+  cardColorMenu.style.left = `${nextX}px`;
+  cardColorMenu.style.top = `${nextY}px`;
+  state.colorMenu.open = true;
+  state.colorMenu.nodeId = nodeId;
+  syncCardColorMenuSelection(nodeId);
+}
+
+function setNodeColor(nodeId, color) {
+  const node = state.nodes.get(nodeId);
+  if (!node) {
+    return;
+  }
+  node.color = normalizeCardColor(color, node.color);
+  applyNodeAppearance(nodeId);
+  syncCardColorMenuSelection(nodeId);
+}
+
+function getEditingNodeId() {
+  const active = document.activeElement;
+  if (!active || !active.classList || !active.classList.contains("node-content")) {
+    return null;
+  }
+  const card = active.closest(".node-card");
+  return card?.dataset.nodeId || null;
+}
+
+function updateTextStyleButtonStates() {
+  if (!textStyleMenu) {
+    return;
+  }
+  const editingNodeId = getEditingNodeId() || state.textMenu.nodeId;
+  const content = editingNodeId ? state.nodeContentElements.get(editingNodeId) : null;
+  const computedAlign = content ? window.getComputedStyle(content).textAlign : "";
+
+  const buttons = textStyleMenu.querySelectorAll(".text-style-btn");
+  for (const button of buttons) {
+    const cmd = button.dataset.cmd;
+    if (!cmd) {
+      continue;
+    }
+    let isActive = false;
+    try {
+      isActive = document.queryCommandState(cmd);
+    } catch {
+      isActive = false;
+    }
+
+    if (!isActive && (cmd === "justifyLeft" || cmd === "justifyCenter" || cmd === "justifyRight")) {
+      if (cmd === "justifyLeft" && (computedAlign === "left" || computedAlign === "start")) {
+        isActive = true;
+      } else if (cmd === "justifyCenter" && computedAlign === "center") {
+        isActive = true;
+      } else if (cmd === "justifyRight" && (computedAlign === "right" || computedAlign === "end")) {
+        isActive = true;
+      }
+    }
+
+    button.classList.toggle("active", !!isActive);
+  }
+}
+
+function hideTextStyleMenu() {
+  if (!textStyleMenu || !state.textMenu.open) {
+    state.textMenu.open = false;
+    state.textMenu.nodeId = null;
+    return;
+  }
+  textStyleMenu.hidden = true;
+  state.textMenu.open = false;
+  state.textMenu.nodeId = null;
+}
+
+function positionTextStyleMenu(nodeId) {
+  if (!textStyleMenu || !state.nodes.has(nodeId)) {
+    hideTextStyleMenu();
+    return;
+  }
+
+  const cardEl = state.nodeElements.get(nodeId);
+  if (!cardEl) {
+    hideTextStyleMenu();
+    return;
+  }
+
+  const viewRect = viewport.getBoundingClientRect();
+  const cardRect = cardEl.getBoundingClientRect();
+  const padding = 8;
+
+  textStyleMenu.hidden = false;
+  textStyleMenu.style.left = "0px";
+  textStyleMenu.style.top = "0px";
+
+  const menuWidth = textStyleMenu.offsetWidth;
+  const menuHeight = textStyleMenu.offsetHeight;
+  const maxX = viewRect.width - menuWidth - padding;
+  const maxY = viewRect.height - menuHeight - padding;
+
+  let x = cardRect.left - viewRect.left + (cardRect.width - menuWidth) / 2;
+  let y = cardRect.top - viewRect.top - menuHeight - 8;
+
+  if (y < padding) {
+    y = cardRect.bottom - viewRect.top + 8;
+  }
+
+  x = clamp(x, padding, Math.max(padding, maxX));
+  y = clamp(y, padding, Math.max(padding, maxY));
+
+  textStyleMenu.style.left = `${x}px`;
+  textStyleMenu.style.top = `${y}px`;
+}
+
+function showTextStyleMenu(nodeId) {
+  if (!textStyleMenu || !state.nodes.has(nodeId)) {
+    return;
+  }
+  state.textMenu.open = true;
+  state.textMenu.nodeId = nodeId;
+  positionTextStyleMenu(nodeId);
+  updateTextStyleButtonStates();
+}
+
+function clearSelectedNode() {
+  if (!state.selectedNodeId) {
+    hideCardColorMenu();
+    hideTextStyleMenu();
+    return;
+  }
+  const selectedCard = state.nodeElements.get(state.selectedNodeId);
+  if (selectedCard) {
+    selectedCard.classList.remove("selected");
+  }
+  hideCardColorMenu();
+  hideTextStyleMenu();
+  state.selectedNodeId = null;
+}
+
+function selectNode(nodeId) {
+  if (!state.nodes.has(nodeId)) {
+    return;
+  }
+  if (state.selectedNodeId === nodeId) {
+    return;
+  }
+
+  const prevNodeId = state.selectedNodeId;
+  if (prevNodeId) {
+    const prevEl = state.nodeElements.get(prevNodeId);
+    if (prevEl) {
+      prevEl.classList.remove("selected");
+    }
+  }
+
+  state.selectedNodeId = nodeId;
+  const nextEl = state.nodeElements.get(nodeId);
+  if (nextEl) {
+    nextEl.classList.add("selected");
+  }
+
+  if (state.selectedEdgeId) {
+    clearSelectedEdge();
+  }
+  hideCardColorMenu();
+  if (state.textMenu.open && state.textMenu.nodeId !== nodeId) {
+    hideTextStyleMenu();
+  }
+}
+
 function syncDeleteEdgeButton() {
   deleteEdgeBtn.disabled = !state.selectedEdgeId;
+}
+
+function syncEdgeTypeSelect() {
+  if (!edgeTypeSelect) {
+    return;
+  }
+  if (state.selectedEdgeId) {
+    const edge = state.edges.get(state.selectedEdgeId);
+    if (edge) {
+      edgeTypeSelect.value = getEdgeType(edge.type);
+      return;
+    }
+  }
+  edgeTypeSelect.value = getEdgeType(state.currentEdgeType);
+}
+
+function setEdgeType(edgeId, edgeType) {
+  const edge = state.edges.get(edgeId);
+  if (!edge) {
+    return;
+  }
+  edge.type = getEdgeType(edgeType);
+  refreshEdgeAppearance(edgeId);
 }
 
 function clearSelectedEdge() {
   if (!state.selectedEdgeId) {
     syncDeleteEdgeButton();
+    syncEdgeTypeSelect();
     return;
   }
-  const selectedLine = state.edgeElements.get(state.selectedEdgeId);
-  if (selectedLine) {
-    selectedLine.classList.remove("selected");
-  }
+  const prevSelectedId = state.selectedEdgeId;
   state.selectedEdgeId = null;
+  refreshEdgeAppearance(prevSelectedId);
   syncDeleteEdgeButton();
+  syncEdgeTypeSelect();
 }
 
 function selectEdge(edgeId) {
-  if (!state.edgeElements.has(edgeId)) {
+  if (!state.edgeElements.has(edgeId) || !state.edges.has(edgeId)) {
     return;
   }
   if (state.selectedEdgeId === edgeId) {
     syncDeleteEdgeButton();
+    syncEdgeTypeSelect();
     return;
   }
+  if (state.selectedNodeId) {
+    clearSelectedNode();
+  }
+  const prevSelectedId = state.selectedEdgeId;
   clearSelectedEdge();
   state.selectedEdgeId = edgeId;
-  const line = state.edgeElements.get(edgeId);
-  if (line) {
-    line.classList.add("selected");
+  if (prevSelectedId) {
+    refreshEdgeAppearance(prevSelectedId);
+  }
+  refreshEdgeAppearance(edgeId);
+  const edge = state.edges.get(edgeId);
+  if (edge) {
+    state.currentEdgeType = getEdgeType(edge.type);
   }
   syncDeleteEdgeButton();
+  syncEdgeTypeSelect();
 }
 
 function applyCamera() {
   const { x, y, scale } = state.camera;
   world.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
   setZoomLabel();
+  if (state.textMenu.open && state.textMenu.nodeId) {
+    positionTextStyleMenu(state.textMenu.nodeId);
+  }
 }
 
 function centerView() {
@@ -149,9 +553,23 @@ function makeEdgeId() {
   return id;
 }
 
-function createCard(x, y) {
+function createCard(x, y, options = {}) {
+  const width = sanitizeCardDimension(
+    options.width ?? DEFAULT_CARD_WIDTH,
+    CARD_MIN_WIDTH,
+    CARD_MAX_WIDTH,
+    DEFAULT_CARD_WIDTH
+  );
+  const height = sanitizeCardDimension(
+    options.height ?? DEFAULT_CARD_HEIGHT,
+    CARD_MIN_HEIGHT,
+    CARD_MAX_HEIGHT,
+    DEFAULT_CARD_HEIGHT
+  );
+  const color = normalizeCardColor(options.color ?? DEFAULT_CARD_COLOR);
+
   const id = makeNodeId();
-  const node = { id, x, y, text: "" };
+  const node = { id, x, y, text: "", width, height, color };
   state.nodes.set(id, node);
 
   const card = document.createElement("article");
@@ -159,13 +577,6 @@ function createCard(x, y) {
   card.style.left = `${x}px`;
   card.style.top = `${y}px`;
   card.dataset.nodeId = id;
-
-  const header = document.createElement("header");
-  header.className = "node-header";
-
-  const title = document.createElement("div");
-  title.className = "node-title";
-  title.innerHTML = `<strong>Karte</strong><span class="node-id">${id}</span>`;
 
   const actions = document.createElement("div");
   actions.className = "node-actions";
@@ -179,54 +590,83 @@ function createCard(x, y) {
   const deleteBtn = document.createElement("button");
   deleteBtn.className = "node-action-btn delete-btn";
   deleteBtn.type = "button";
-  deleteBtn.title = "Karte loeschen";
+  deleteBtn.title = "Karte löschen";
   deleteBtn.textContent = "x";
 
   actions.append(quickAddBtn, deleteBtn);
-  header.append(title, actions);
 
   const content = document.createElement("div");
   content.className = "node-content";
   content.setAttribute("contenteditable", "true");
   content.spellcheck = false;
 
-  card.append(header, content);
+  const resizeHandle = document.createElement("button");
+  resizeHandle.className = "resize-handle";
+  resizeHandle.type = "button";
+  resizeHandle.title = "Größe ziehen";
+
+  card.append(actions, content, resizeHandle);
   nodesLayer.appendChild(card);
   state.nodeElements.set(id, card);
+  state.nodeContentElements.set(id, content);
+  applyNodeAppearance(id);
 
-  header.addEventListener("pointerdown", (event) => {
-    if (state.mode === "connect") {
-      if (event.target.closest(".node-action-btn")) {
-        return;
-      }
+  card.addEventListener("pointerdown", (event) => {
+    const onAction = !!event.target.closest(".node-action-btn");
+    const onResize = !!event.target.closest(".resize-handle");
+    if (event.button === 0 && !onAction && !onResize) {
+      selectNode(id);
+    }
+
+    if (
+      state.mode === "connect" &&
+      event.button === 0 &&
+      !onAction &&
+      !onResize
+    ) {
       event.preventDefault();
-      event.stopPropagation();
       handleConnectClick(id);
       return;
     }
 
-    if (event.target.closest(".node-action-btn")) {
+    if (event.button !== 0 || onAction || onResize) {
       return;
     }
 
-    if (event.button !== 0) {
-      return;
-    }
-
-    const start = screenToWorld(event.clientX, event.clientY);
     const pointerId = event.pointerId;
+    const startWorld = screenToWorld(event.clientX, event.clientY);
+    const startClientX = event.clientX;
+    const startClientY = event.clientY;
     const startX = node.x;
     const startY = node.y;
+    let isDragging = false;
 
-    header.setPointerCapture(pointerId);
+    card.setPointerCapture(pointerId);
 
     const onMove = (moveEvent) => {
       if (moveEvent.pointerId !== pointerId) {
         return;
       }
-      const now = screenToWorld(moveEvent.clientX, moveEvent.clientY);
-      const dx = now.x - start.x;
-      const dy = now.y - start.y;
+
+      if (!isDragging) {
+        const dragDistance = Math.hypot(
+          moveEvent.clientX - startClientX,
+          moveEvent.clientY - startClientY
+        );
+        if (dragDistance < 5) {
+          return;
+        }
+        isDragging = true;
+        card.classList.add("dragging");
+        if (document.activeElement === content) {
+          content.blur();
+        }
+      }
+
+      moveEvent.preventDefault();
+      const nowWorld = screenToWorld(moveEvent.clientX, moveEvent.clientY);
+      const dx = nowWorld.x - startWorld.x;
+      const dy = nowWorld.y - startWorld.y;
       node.x = startX + dx;
       node.y = startY + dy;
       card.style.left = `${node.x}px`;
@@ -238,27 +678,62 @@ function createCard(x, y) {
       if (upEvent.pointerId !== pointerId) {
         return;
       }
-      header.releasePointerCapture(pointerId);
-      header.removeEventListener("pointermove", onMove);
-      header.removeEventListener("pointerup", onUp);
-      header.removeEventListener("pointercancel", onUp);
+      card.releasePointerCapture(pointerId);
+      card.classList.remove("dragging");
+      card.removeEventListener("pointermove", onMove);
+      card.removeEventListener("pointerup", onUp);
+      card.removeEventListener("pointercancel", onUp);
     };
 
-    header.addEventListener("pointermove", onMove);
-    header.addEventListener("pointerup", onUp);
-    header.addEventListener("pointercancel", onUp);
+    card.addEventListener("pointermove", onMove);
+    card.addEventListener("pointerup", onUp);
+    card.addEventListener("pointercancel", onUp);
   });
 
-  card.addEventListener("pointerdown", (event) => {
-    if (state.mode === "connect" && !event.target.closest(".node-action-btn")) {
-      event.preventDefault();
-      handleConnectClick(id);
+  card.addEventListener("contextmenu", (event) => {
+    if (event.target.closest(".resize-handle") || event.target.closest(".node-action-btn")) {
+      return;
     }
+    event.preventDefault();
+    selectNode(id);
+    hideTextStyleMenu();
+    showCardColorMenu(id, event.clientX, event.clientY);
   });
 
   content.addEventListener("input", () => {
     node.text = content.textContent || "";
     updateEdgePositionsForNode(id);
+    if (state.textMenu.open && state.textMenu.nodeId === id) {
+      updateTextStyleButtonStates();
+      positionTextStyleMenu(id);
+    }
+  });
+
+  content.addEventListener("focus", () => {
+    selectNode(id);
+    showTextStyleMenu(id);
+  });
+
+  content.addEventListener("blur", () => {
+    window.setTimeout(() => {
+      const editingNodeId = getEditingNodeId();
+      if (editingNodeId !== id) {
+        hideTextStyleMenu();
+      }
+    }, 0);
+  });
+
+  content.addEventListener("keyup", () => {
+    if (state.textMenu.open && state.textMenu.nodeId === id) {
+      updateTextStyleButtonStates();
+      positionTextStyleMenu(id);
+    }
+  });
+
+  content.addEventListener("mouseup", () => {
+    if (state.textMenu.open && state.textMenu.nodeId === id) {
+      updateTextStyleButtonStates();
+    }
   });
 
   deleteBtn.addEventListener("click", (event) => {
@@ -270,7 +745,48 @@ function createCard(x, y) {
     startQuickCreateDrag(event, id, quickAddBtn);
   });
 
-  content.focus();
+  resizeHandle.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    selectNode(id);
+    hideCardColorMenu();
+
+    const pointerId = event.pointerId;
+    const start = screenToWorld(event.clientX, event.clientY);
+    const startWidth = node.width;
+    const startHeight = node.height;
+    resizeHandle.setPointerCapture(pointerId);
+
+    const onMove = (moveEvent) => {
+      if (moveEvent.pointerId !== pointerId) {
+        return;
+      }
+      const now = screenToWorld(moveEvent.clientX, moveEvent.clientY);
+      const dx = now.x - start.x;
+      const dy = now.y - start.y;
+      node.width = sanitizeCardDimension(startWidth + dx, CARD_MIN_WIDTH, CARD_MAX_WIDTH, startWidth);
+      node.height = sanitizeCardDimension(startHeight + dy, CARD_MIN_HEIGHT, CARD_MAX_HEIGHT, startHeight);
+      applyNodeAppearance(id);
+    };
+
+    const onUp = (upEvent) => {
+      if (upEvent.pointerId !== pointerId) {
+        return;
+      }
+      resizeHandle.releasePointerCapture(pointerId);
+      resizeHandle.removeEventListener("pointermove", onMove);
+      resizeHandle.removeEventListener("pointerup", onUp);
+      resizeHandle.removeEventListener("pointercancel", onUp);
+    };
+
+    resizeHandle.addEventListener("pointermove", onMove);
+    resizeHandle.addEventListener("pointerup", onUp);
+    resizeHandle.addEventListener("pointercancel", onUp);
+  });
+
   updateAllEdges();
   return id;
 }
@@ -281,7 +797,16 @@ function removeNode(nodeId) {
     el.remove();
   }
   state.nodeElements.delete(nodeId);
+  state.nodeContentElements.delete(nodeId);
   state.nodes.delete(nodeId);
+  if (state.selectedNodeId === nodeId) {
+    state.selectedNodeId = null;
+    hideCardColorMenu();
+    hideTextStyleMenu();
+  }
+  if (state.textMenu.nodeId === nodeId) {
+    hideTextStyleMenu();
+  }
   if (state.connectSourceId === nodeId) {
     clearConnectSource();
   }
@@ -309,29 +834,45 @@ function removeEdge(edgeId) {
   state.edgeHitElements.delete(edgeId);
   state.edges.delete(edgeId);
   syncDeleteEdgeButton();
+  syncEdgeTypeSelect();
 }
 
-function edgeExists(from, to) {
+function edgeExists(from, to, edgeType = state.currentEdgeType) {
+  const newDirected = isDirectedType(edgeType);
   for (const edge of state.edges.values()) {
     const sameDirection = edge.from === from && edge.to === to;
     const reverseDirection = edge.from === to && edge.to === from;
-    if (sameDirection || reverseDirection) {
+    const existingDirected = isDirectedType(edge.type);
+
+    if (!newDirected) {
+      if (sameDirection || reverseDirection) {
+        return true;
+      }
+      continue;
+    }
+
+    if (!existingDirected && (sameDirection || reverseDirection)) {
+      return true;
+    }
+
+    if (existingDirected && sameDirection) {
       return true;
     }
   }
   return false;
 }
 
-function createEdge(fromId, toId) {
+function createEdge(fromId, toId, edgeType = state.currentEdgeType) {
+  const normalizedType = getEdgeType(edgeType);
   if (!state.nodes.has(fromId) || !state.nodes.has(toId)) {
     return;
   }
-  if (fromId === toId || edgeExists(fromId, toId)) {
+  if (fromId === toId || edgeExists(fromId, toId, normalizedType)) {
     return;
   }
 
   const edgeId = makeEdgeId();
-  const edge = { id: edgeId, from: fromId, to: toId };
+  const edge = { id: edgeId, from: fromId, to: toId, type: normalizedType };
   state.edges.set(edgeId, edge);
 
   const hitLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
@@ -351,18 +892,52 @@ function createEdge(fromId, toId) {
   state.edgeElements.set(edgeId, line);
   state.edgeHitElements.set(edgeId, hitLine);
 
+  refreshEdgeAppearance(edgeId);
   updateEdgePosition(edge);
 }
 
-function getCardCenter(nodeId) {
+function getCardRect(nodeId) {
   const node = state.nodes.get(nodeId);
   const el = state.nodeElements.get(nodeId);
   if (!node || !el) {
     return null;
   }
+  const width = el.offsetWidth;
+  const height = el.offsetHeight;
+  const cx = node.x + width / 2;
+  const cy = node.y + height / 2;
   return {
-    x: node.x + el.offsetWidth / 2,
-    y: node.y + el.offsetHeight / 2,
+    left: node.x,
+    top: node.y,
+    width,
+    height,
+    cx,
+    cy,
+  };
+}
+
+function getCardCenter(nodeId) {
+  const rect = getCardRect(nodeId);
+  if (!rect) {
+    return null;
+  }
+  return { x: rect.cx, y: rect.cy };
+}
+
+function getCardBoundaryPoint(rect, towardPoint) {
+  const dx = towardPoint.x - rect.cx;
+  const dy = towardPoint.y - rect.cy;
+  if (dx === 0 && dy === 0) {
+    return { x: rect.cx, y: rect.cy };
+  }
+
+  const halfW = rect.width / 2;
+  const halfH = rect.height / 2;
+  const scale = 1 / Math.max(Math.abs(dx) / halfW, Math.abs(dy) / halfH);
+
+  return {
+    x: rect.cx + dx * scale,
+    y: rect.cy + dy * scale,
   };
 }
 
@@ -373,11 +948,16 @@ function updateEdgePosition(edge) {
     return;
   }
 
-  const a = getCardCenter(edge.from);
-  const b = getCardCenter(edge.to);
-  if (!a || !b) {
+  const fromRect = getCardRect(edge.from);
+  const toRect = getCardRect(edge.to);
+  if (!fromRect || !toRect) {
     return;
   }
+
+  const fromCenter = { x: fromRect.cx, y: fromRect.cy };
+  const toCenter = { x: toRect.cx, y: toRect.cy };
+  const a = getCardBoundaryPoint(fromRect, toCenter);
+  const b = getCardBoundaryPoint(toRect, fromCenter);
 
   line.setAttribute("x1", String(a.x));
   line.setAttribute("y1", String(a.y));
@@ -436,6 +1016,16 @@ function setDraftEdgeVisible(isVisible) {
   draftEdge.classList.toggle("visible", isVisible);
 }
 
+function syncDraftEdgeStyle() {
+  const edgeType = getEdgeType(state.currentEdgeType);
+  draftEdge.classList.toggle("is-dashed", isDashedType(edgeType));
+  if (isDirectedType(edgeType)) {
+    draftEdge.setAttribute("marker-end", "url(#edge-arrow-draft)");
+  } else {
+    draftEdge.removeAttribute("marker-end");
+  }
+}
+
 function updateDraftEdge(sourceNodeId, clientX, clientY) {
   const sourceCenter = getCardCenter(sourceNodeId);
   if (!sourceCenter) {
@@ -459,6 +1049,7 @@ function startQuickCreateDrag(event, sourceNodeId, quickAddBtn) {
 
   event.preventDefault();
   event.stopPropagation();
+  selectNode(sourceNodeId);
   clearSelectedEdge();
   clearConnectSource();
 
@@ -470,6 +1061,7 @@ function startQuickCreateDrag(event, sourceNodeId, quickAddBtn) {
   state.quickCreate.startClientY = event.clientY;
 
   quickAddBtn.setPointerCapture(pointerId);
+  syncDraftEdgeStyle();
   setDraftEdgeVisible(true);
   updateDraftEdge(sourceNodeId, event.clientX, event.clientY);
 
@@ -546,9 +1138,14 @@ function stopPanning(pointerId) {
 }
 
 viewport.addEventListener("pointerdown", (event) => {
+  if (event.target.closest("#card-color-menu")) {
+    return;
+  }
+
   const onCard = event.target.closest(".node-card");
   if (!onCard) {
     clearSelectedEdge();
+    clearSelectedNode();
   }
 
   if (state.mode === "add" && !onCard && event.button === 0) {
@@ -617,6 +1214,8 @@ window.addEventListener("keydown", (event) => {
   }
 
   if (event.key === "Escape") {
+    hideCardColorMenu();
+    hideTextStyleMenu();
     setMode("move");
   }
 });
@@ -627,6 +1226,76 @@ window.addEventListener("resize", () => {
   } else {
     applyCamera();
   }
+  hideCardColorMenu();
+  if (state.textMenu.open && state.textMenu.nodeId) {
+    positionTextStyleMenu(state.textMenu.nodeId);
+  }
+});
+
+if (cardColorPresets) {
+  cardColorPresets.addEventListener("click", (event) => {
+    const swatch = event.target.closest(".card-color-swatch");
+    if (!swatch) {
+      return;
+    }
+    const nodeId = state.colorMenu.nodeId;
+    if (!nodeId || !state.nodes.has(nodeId)) {
+      return;
+    }
+    const color = normalizeCardColor(swatch.dataset.color || "", DEFAULT_CARD_COLOR);
+    setNodeColor(nodeId, color);
+    hideCardColorMenu();
+  });
+}
+
+if (textStyleMenu) {
+  textStyleMenu.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+  });
+
+  textStyleMenu.addEventListener("click", (event) => {
+    const button = event.target.closest(".text-style-btn");
+    if (!button) {
+      return;
+    }
+
+    const cmd = button.dataset.cmd;
+    if (!cmd) {
+      return;
+    }
+
+    const editingNodeId = getEditingNodeId() || state.textMenu.nodeId;
+    if (!editingNodeId) {
+      hideTextStyleMenu();
+      return;
+    }
+    const content = state.nodeContentElements.get(editingNodeId);
+    if (!content) {
+      hideTextStyleMenu();
+      return;
+    }
+
+    content.focus();
+    try {
+      document.execCommand(cmd, false, null);
+    } catch {
+      return;
+    }
+    updateTextStyleButtonStates();
+    positionTextStyleMenu(editingNodeId);
+  });
+}
+
+window.addEventListener("pointerdown", (event) => {
+  if (event.target.closest("#card-color-menu") || event.target.closest("#text-style-menu")) {
+    return;
+  }
+  hideCardColorMenu();
+  const editingNodeId = getEditingNodeId();
+  if (!editingNodeId) {
+    hideTextStyleMenu();
+  }
 });
 
 addCardBtn.addEventListener("click", () => {
@@ -636,6 +1305,18 @@ addCardBtn.addEventListener("click", () => {
 connectBtn.addEventListener("click", () => {
   setMode(state.mode === "connect" ? "move" : "connect");
 });
+
+if (edgeTypeSelect) {
+  edgeTypeSelect.addEventListener("change", () => {
+    const nextType = getEdgeType(edgeTypeSelect.value);
+    state.currentEdgeType = nextType;
+    syncDraftEdgeStyle();
+    if (state.selectedEdgeId) {
+      setEdgeType(state.selectedEdgeId, nextType);
+    }
+    syncEdgeTypeSelect();
+  });
+}
 
 deleteEdgeBtn.addEventListener("click", () => {
   if (!state.selectedEdgeId) {
@@ -649,11 +1330,15 @@ resetViewBtn.addEventListener("click", centerView);
 edgesLayer.setAttribute("viewBox", `0 0 ${WORLD_SIZE} ${WORLD_SIZE}`);
 edgesLayer.setAttribute("width", String(WORLD_SIZE));
 edgesLayer.setAttribute("height", String(WORLD_SIZE));
+edgesLayer.appendChild(edgeDefs);
 edgesLayer.appendChild(draftEdge);
 
 setMode("move");
 centerView();
 syncDeleteEdgeButton();
+syncDraftEdgeStyle();
+syncEdgeTypeSelect();
+renderCardColorPresets();
 
 createCard(WORLD_CENTER - 130, WORLD_CENTER - 100);
 createCard(WORLD_CENTER + 210, WORLD_CENTER - 10);

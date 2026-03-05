@@ -13,7 +13,16 @@
       <div class="controls">
         <button id="add-card-btn" class="tool-btn">Karte erstellen</button>
         <button id="connect-btn" class="tool-btn">Verbinden</button>
-        <button id="delete-edge-btn" class="tool-btn ghost" disabled>Verbindung loeschen</button>
+        <label class="edge-type-wrap" for="edge-type-select">
+          Verbindung:
+          <select id="edge-type-select" class="edge-type-select">
+            <option value="solid">durchgezogen</option>
+            <option value="dashed">gestrichelt</option>
+            <option value="directed">gerichtet</option>
+            <option value="directed-dashed">gerichtet + gestrichelt</option>
+          </select>
+        </label>
+        <button id="delete-edge-btn" class="tool-btn ghost" disabled>Verbindung löschen</button>
         <button id="reset-view-btn" class="tool-btn ghost">Ansicht zentrieren</button>
       </div>
       <div class="status-wrap">
@@ -27,8 +36,21 @@
         <svg id="edges-layer" class="edges-layer" aria-hidden="true"></svg>
         <div id="nodes-layer" class="nodes-layer"></div>
       </div>
+      <div id="card-color-menu" class="card-color-menu" hidden>
+        <div class="card-color-title">Kartenfarbe</div>
+        <div id="card-color-presets" class="card-color-presets"></div>
+      </div>
+      <div id="text-style-menu" class="text-style-menu" hidden>
+        <button type="button" class="text-style-btn" data-cmd="bold" title="Fett"><strong>B</strong></button>
+        <button type="button" class="text-style-btn" data-cmd="italic" title="Kursiv"><em>I</em></button>
+        <button type="button" class="text-style-btn" data-cmd="underline" title="Unterstrichen"><u>U</u></button>
+        <span class="text-style-sep"></span>
+        <button type="button" class="text-style-btn" data-cmd="justifyLeft" title="Linksbündig">L</button>
+        <button type="button" class="text-style-btn" data-cmd="justifyCenter" title="Zentriert">C</button>
+        <button type="button" class="text-style-btn" data-cmd="justifyRight" title="Rechtsbündig">R</button>
+      </div>
       <div class="hint">
-        Scrollen: Zoom · Hintergrund ziehen: Pan · + an Karte ziehen: neue verbundene Karte · Verbindung klicken + Entf: loeschen
+        Scrollen: Zoom · Hintergrund ziehen: Pan · Text klicken: bearbeiten + Stilmenü · Rechtsklick: Farbe · Ecke ziehen: Größe
       </div>
     </main>
   </div>
