@@ -22,6 +22,10 @@
             <option value="directed-dashed">gerichtet + gestrichelt</option>
           </select>
         </label>
+        <button id="export-data-btn" class="tool-btn ghost">Daten exportieren</button>
+        <button id="import-data-btn" class="tool-btn ghost">Daten importieren</button>
+        <button id="export-image-btn" class="tool-btn ghost">Bild exportieren</button>
+        <input id="import-file-input" type="file" accept=".json,application/json" hidden />
         <button id="delete-edge-btn" class="tool-btn ghost" disabled>Verbindung löschen</button>
         <button id="reset-view-btn" class="tool-btn ghost">Ansicht zentrieren</button>
       </div>
@@ -50,7 +54,7 @@
         <button type="button" class="text-style-btn" data-cmd="justifyRight" title="Rechtsbündig">R</button>
       </div>
       <div class="hint">
-        Scrollen: Zoom · Hintergrund ziehen: Pan · Text klicken: bearbeiten + Stilmenü · Rechtsklick: Farbe · Ecke ziehen: Größe
+        Scrollen: Zoom · Hintergrund ziehen: Pan · Text klicken: bearbeiten + Stilmenü · Rechtsklick: Farbe · Ecke ziehen: Größe · Export/Import oben
       </div>
     </main>
   </div>

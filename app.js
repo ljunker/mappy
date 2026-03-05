@@ -10,6 +10,9 @@ const CARD_MAX_WIDTH = 700;
 const CARD_MIN_HEIGHT = 100;
 const CARD_MAX_HEIGHT = 560;
 const QUICK_CREATE_MIN_DRAG = 10;
+const IMAGE_EXPORT_MARGIN = 80;
+const IMAGE_EXPORT_SCALE = 2;
+const IMAGE_EXPORT_MAX_PX = 8000;
 
 const viewport = document.getElementById("viewport");
 const world = document.getElementById("world");
@@ -21,6 +24,10 @@ const cardColorMenu = document.getElementById("card-color-menu");
 const cardColorPresets = document.getElementById("card-color-presets");
 const textStyleMenu = document.getElementById("text-style-menu");
 const edgeTypeSelect = document.getElementById("edge-type-select");
+const exportDataBtn = document.getElementById("export-data-btn");
+const importDataBtn = document.getElementById("import-data-btn");
+const exportImageBtn = document.getElementById("export-image-btn");
+const importFileInput = document.getElementById("import-file-input");
 const deleteEdgeBtn = document.getElementById("delete-edge-btn");
 const resetViewBtn = document.getElementById("reset-view-btn");
 const statusPill = document.getElementById("status-pill");
@@ -32,7 +39,7 @@ const EDGE_TYPES = {
   directed: { dashed: false, directed: true },
   "directed-dashed": { dashed: true, directed: true },
 };
-const DEFAULT_EDGE_TYPE = "solid";
+const DEFAULT_EDGE_TYPE = "directed";
 const CARD_COLOR_PRESETS = [
   "#ffffff",
   "#fef3c7",
@@ -92,8 +99,8 @@ function createEdgeMarker(id, color) {
   marker.setAttribute("viewBox", "0 0 8 8");
   marker.setAttribute("refX", "7.5");
   marker.setAttribute("refY", "4");
-  marker.setAttribute("markerWidth", "6");
-  marker.setAttribute("markerHeight", "6");
+  marker.setAttribute("markerWidth", "7");
+  marker.setAttribute("markerHeight", "7");
   marker.setAttribute("markerUnits", "userSpaceOnUse");
   marker.setAttribute("orient", "auto");
 
@@ -134,6 +141,15 @@ function normalizeCardColor(value, fallback = DEFAULT_CARD_COLOR) {
     return lowered;
   }
   return fallback;
+}
+
+function escapeHtml(text) {
+  return String(text)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
 function getEdgeType(type) {
@@ -553,6 +569,49 @@ function makeEdgeId() {
   return id;
 }
 
+function updateIdCounterFromId(id, prefix) {
+  const pattern = new RegExp(`^${prefix}(\\d+)$`);
+  const match = id.match(pattern);
+  if (!match) {
+    return;
+  }
+  const numeric = Number.parseInt(match[1], 10);
+  if (!Number.isFinite(numeric)) {
+    return;
+  }
+  if (prefix === "N") {
+    state.nextNodeId = Math.max(state.nextNodeId, numeric + 1);
+    return;
+  }
+  if (prefix === "E") {
+    state.nextEdgeId = Math.max(state.nextEdgeId, numeric + 1);
+  }
+}
+
+function reserveNodeId(preferredId) {
+  if (typeof preferredId !== "string" || preferredId.trim() === "") {
+    return makeNodeId();
+  }
+  const candidate = preferredId.trim();
+  if (state.nodes.has(candidate)) {
+    return makeNodeId();
+  }
+  updateIdCounterFromId(candidate, "N");
+  return candidate;
+}
+
+function reserveEdgeId(preferredId) {
+  if (typeof preferredId !== "string" || preferredId.trim() === "") {
+    return makeEdgeId();
+  }
+  const candidate = preferredId.trim();
+  if (state.edges.has(candidate)) {
+    return makeEdgeId();
+  }
+  updateIdCounterFromId(candidate, "E");
+  return candidate;
+}
+
 function createCard(x, y, options = {}) {
   const width = sanitizeCardDimension(
     options.width ?? DEFAULT_CARD_WIDTH,
@@ -567,9 +626,10 @@ function createCard(x, y, options = {}) {
     DEFAULT_CARD_HEIGHT
   );
   const color = normalizeCardColor(options.color ?? DEFAULT_CARD_COLOR);
+  const initialHtml = typeof options.html === "string" ? options.html : "";
 
-  const id = makeNodeId();
-  const node = { id, x, y, text: "", width, height, color };
+  const id = reserveNodeId(options.id);
+  const node = { id, x, y, text: "", html: initialHtml, width, height, color };
   state.nodes.set(id, node);
 
   const card = document.createElement("article");
@@ -599,6 +659,11 @@ function createCard(x, y, options = {}) {
   content.className = "node-content";
   content.setAttribute("contenteditable", "true");
   content.spellcheck = false;
+  if (initialHtml) {
+    content.innerHTML = initialHtml;
+    node.text = content.textContent || "";
+    node.html = content.innerHTML;
+  }
 
   const resizeHandle = document.createElement("button");
   resizeHandle.className = "resize-handle";
@@ -702,6 +767,7 @@ function createCard(x, y, options = {}) {
 
   content.addEventListener("input", () => {
     node.text = content.textContent || "";
+    node.html = content.innerHTML;
     updateEdgePositionsForNode(id);
     if (state.textMenu.open && state.textMenu.nodeId === id) {
       updateTextStyleButtonStates();
@@ -862,16 +928,20 @@ function edgeExists(from, to, edgeType = state.currentEdgeType) {
   return false;
 }
 
-function createEdge(fromId, toId, edgeType = state.currentEdgeType) {
+function createEdge(fromId, toId, edgeType = state.currentEdgeType, options = {}) {
   const normalizedType = getEdgeType(edgeType);
+  const force = !!options.force;
   if (!state.nodes.has(fromId) || !state.nodes.has(toId)) {
     return;
   }
-  if (fromId === toId || edgeExists(fromId, toId, normalizedType)) {
+  if (!force && (fromId === toId || edgeExists(fromId, toId, normalizedType))) {
     return;
   }
 
-  const edgeId = makeEdgeId();
+  const edgeId = reserveEdgeId(options.id);
+  if (state.edges.has(edgeId)) {
+    return;
+  }
   const edge = { id: edgeId, from: fromId, to: toId, type: normalizedType };
   state.edges.set(edgeId, edge);
 
@@ -894,6 +964,7 @@ function createEdge(fromId, toId, edgeType = state.currentEdgeType) {
 
   refreshEdgeAppearance(edgeId);
   updateEdgePosition(edge);
+  return edgeId;
 }
 
 function getCardRect(nodeId) {
@@ -941,6 +1012,20 @@ function getCardBoundaryPoint(rect, towardPoint) {
   };
 }
 
+function getEdgeEndpoints(edge) {
+  const fromRect = getCardRect(edge.from);
+  const toRect = getCardRect(edge.to);
+  if (!fromRect || !toRect) {
+    return null;
+  }
+
+  const fromCenter = { x: fromRect.cx, y: fromRect.cy };
+  const toCenter = { x: toRect.cx, y: toRect.cy };
+  const a = getCardBoundaryPoint(fromRect, toCenter);
+  const b = getCardBoundaryPoint(toRect, fromCenter);
+  return { a, b };
+}
+
 function updateEdgePosition(edge) {
   const line = state.edgeElements.get(edge.id);
   const hitLine = state.edgeHitElements.get(edge.id);
@@ -948,16 +1033,11 @@ function updateEdgePosition(edge) {
     return;
   }
 
-  const fromRect = getCardRect(edge.from);
-  const toRect = getCardRect(edge.to);
-  if (!fromRect || !toRect) {
+  const points = getEdgeEndpoints(edge);
+  if (!points) {
     return;
   }
-
-  const fromCenter = { x: fromRect.cx, y: fromRect.cy };
-  const toCenter = { x: toRect.cx, y: toRect.cy };
-  const a = getCardBoundaryPoint(fromRect, toCenter);
-  const b = getCardBoundaryPoint(toRect, fromCenter);
+  const { a, b } = points;
 
   line.setAttribute("x1", String(a.x));
   line.setAttribute("y1", String(a.y));
@@ -984,6 +1064,381 @@ function updateEdgePositionsForNode(nodeId) {
       updateEdgePosition(edge);
     }
   }
+}
+
+function clearBoard() {
+  hideCardColorMenu();
+  hideTextStyleMenu();
+  clearConnectSource();
+  clearSelectedEdge();
+  clearSelectedNode();
+
+  for (const line of state.edgeElements.values()) {
+    line.remove();
+  }
+  for (const hitLine of state.edgeHitElements.values()) {
+    hitLine.remove();
+  }
+  for (const nodeEl of state.nodeElements.values()) {
+    nodeEl.remove();
+  }
+
+  state.edges.clear();
+  state.edgeElements.clear();
+  state.edgeHitElements.clear();
+  state.nodes.clear();
+  state.nodeElements.clear();
+  state.nodeContentElements.clear();
+
+  state.nextNodeId = 1;
+  state.nextEdgeId = 1;
+}
+
+function buildSnapshot() {
+  const nodes = [];
+  for (const [nodeId, node] of state.nodes.entries()) {
+    const contentEl = state.nodeContentElements.get(nodeId);
+    const html = contentEl ? contentEl.innerHTML : node.html || "";
+    const text = contentEl ? contentEl.textContent || "" : node.text || "";
+    nodes.push({
+      id: node.id,
+      x: node.x,
+      y: node.y,
+      width: node.width,
+      height: node.height,
+      color: normalizeCardColor(node.color),
+      text,
+      html,
+    });
+  }
+
+  const edges = [];
+  for (const edge of state.edges.values()) {
+    edges.push({
+      id: edge.id,
+      from: edge.from,
+      to: edge.to,
+      type: getEdgeType(edge.type),
+    });
+  }
+
+  nodes.sort((a, b) => a.id.localeCompare(b.id));
+  edges.sort((a, b) => a.id.localeCompare(b.id));
+
+  return {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    camera: {
+      x: state.camera.x,
+      y: state.camera.y,
+      scale: state.camera.scale,
+    },
+    settings: {
+      currentEdgeType: getEdgeType(state.currentEdgeType),
+    },
+    nodes,
+    edges,
+  };
+}
+
+function downloadBlob(filename, blob) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 2500);
+}
+
+function getFileTimestamp() {
+  return new Date().toISOString().replace(/[:.]/g, "-");
+}
+
+function importSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== "object") {
+    throw new Error("Die Datei enthält keine gültigen Daten.");
+  }
+  if (!Array.isArray(snapshot.nodes) || !Array.isArray(snapshot.edges)) {
+    throw new Error("Es fehlen Knoten- oder Verbindungsdaten.");
+  }
+
+  clearBoard();
+
+  for (const rawNode of snapshot.nodes) {
+    if (!rawNode || typeof rawNode !== "object") {
+      continue;
+    }
+    const x = Number.isFinite(rawNode.x) ? rawNode.x : WORLD_CENTER - DEFAULT_CARD_WIDTH / 2;
+    const y = Number.isFinite(rawNode.y) ? rawNode.y : WORLD_CENTER - DEFAULT_CARD_HEIGHT / 2;
+    const html =
+      typeof rawNode.html === "string"
+        ? rawNode.html
+        : typeof rawNode.text === "string"
+          ? escapeHtml(rawNode.text).replaceAll("\n", "<br>")
+          : "";
+    createCard(x, y, {
+      id: typeof rawNode.id === "string" ? rawNode.id : undefined,
+      width: rawNode.width,
+      height: rawNode.height,
+      color: rawNode.color,
+      html,
+    });
+  }
+
+  for (const rawEdge of snapshot.edges) {
+    if (!rawEdge || typeof rawEdge !== "object") {
+      continue;
+    }
+    if (typeof rawEdge.from !== "string" || typeof rawEdge.to !== "string") {
+      continue;
+    }
+    createEdge(rawEdge.from, rawEdge.to, rawEdge.type, {
+      id: typeof rawEdge.id === "string" ? rawEdge.id : undefined,
+      force: true,
+    });
+  }
+
+  if (snapshot.camera && typeof snapshot.camera === "object") {
+    const nextScale = clamp(
+      Number.isFinite(snapshot.camera.scale) ? snapshot.camera.scale : 1,
+      MIN_SCALE,
+      MAX_SCALE
+    );
+    state.camera.scale = nextScale;
+    state.camera.x = Number.isFinite(snapshot.camera.x) ? snapshot.camera.x : state.camera.x;
+    state.camera.y = Number.isFinite(snapshot.camera.y) ? snapshot.camera.y : state.camera.y;
+  }
+
+  if (snapshot.settings && typeof snapshot.settings === "object") {
+    state.currentEdgeType = getEdgeType(snapshot.settings.currentEdgeType);
+  } else {
+    state.currentEdgeType = DEFAULT_EDGE_TYPE;
+  }
+
+  setMode("move");
+  applyCamera();
+  updateAllEdges();
+  syncEdgeTypeSelect();
+  syncDraftEdgeStyle();
+}
+
+function getExportBounds() {
+  if (state.nodes.size === 0) {
+    const rect = viewport.getBoundingClientRect();
+    const minX = (-state.camera.x) / state.camera.scale;
+    const minY = (-state.camera.y) / state.camera.scale;
+    const width = rect.width / state.camera.scale;
+    const height = rect.height / state.camera.scale;
+    return {
+      minX,
+      minY,
+      maxX: minX + width,
+      maxY: minY + height,
+    };
+  }
+
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+
+  for (const node of state.nodes.values()) {
+    minX = Math.min(minX, node.x);
+    minY = Math.min(minY, node.y);
+    maxX = Math.max(maxX, node.x + node.width);
+    maxY = Math.max(maxY, node.y + node.height);
+  }
+
+  return { minX, minY, maxX, maxY };
+}
+
+function drawRoundedRectPath(ctx, x, y, width, height, radius) {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + width - r, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+  ctx.lineTo(x + width, y + height - r);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  ctx.lineTo(x + r, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function drawArrowHead(ctx, x1, y1, x2, y2, color) {
+  const angle = Math.atan2(y2 - y1, x2 - x1);
+  const length = 9;
+  const width = 5;
+
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(
+    x2 - Math.cos(angle) * length + Math.sin(angle) * width,
+    y2 - Math.sin(angle) * length - Math.cos(angle) * width
+  );
+  ctx.lineTo(
+    x2 - Math.cos(angle) * length - Math.sin(angle) * width,
+    y2 - Math.sin(angle) * length + Math.cos(angle) * width
+  );
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawWrappedText(ctx, text, x, y, maxWidth, maxHeight, align) {
+  const paragraphs = String(text || "").replace(/\r/g, "").split("\n");
+  const lines = [];
+
+  for (const paragraph of paragraphs) {
+    if (paragraph.trim() === "") {
+      lines.push("");
+      continue;
+    }
+    const words = paragraph.split(/\s+/);
+    let line = words.shift() || "";
+    for (const word of words) {
+      const candidate = `${line} ${word}`;
+      if (ctx.measureText(candidate).width <= maxWidth) {
+        line = candidate;
+      } else {
+        lines.push(line);
+        line = word;
+      }
+    }
+    lines.push(line);
+  }
+
+  const lineHeight = 20;
+  const maxLines = Math.max(1, Math.floor(maxHeight / lineHeight));
+  const visibleLines = lines.slice(0, maxLines);
+
+  const alignMode =
+    align === "left" || align === "start"
+      ? "left"
+      : align === "right" || align === "end"
+        ? "right"
+        : "center";
+  ctx.textAlign = alignMode;
+  ctx.textBaseline = "top";
+
+  let drawX = x + maxWidth / 2;
+  if (alignMode === "left") {
+    drawX = x;
+  } else if (alignMode === "right") {
+    drawX = x + maxWidth;
+  }
+
+  visibleLines.forEach((line, index) => {
+    ctx.fillText(line, drawX, y + index * lineHeight);
+  });
+}
+
+function exportAsImage() {
+  const bounds = getExportBounds();
+  const originX = bounds.minX - IMAGE_EXPORT_MARGIN;
+  const originY = bounds.minY - IMAGE_EXPORT_MARGIN;
+  const worldWidth = Math.max(100, bounds.maxX - bounds.minX + IMAGE_EXPORT_MARGIN * 2);
+  const worldHeight = Math.max(100, bounds.maxY - bounds.minY + IMAGE_EXPORT_MARGIN * 2);
+
+  let scale = IMAGE_EXPORT_SCALE;
+  const maxWorld = Math.max(worldWidth, worldHeight);
+  if (maxWorld * scale > IMAGE_EXPORT_MAX_PX) {
+    scale = IMAGE_EXPORT_MAX_PX / maxWorld;
+  }
+  scale = Math.max(0.5, scale);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(worldWidth * scale));
+  canvas.height = Math.max(1, Math.round(worldHeight * scale));
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    throw new Error("Canvas konnte nicht erstellt werden.");
+  }
+
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
+  ctx.fillStyle = "#f2f3f5";
+  ctx.fillRect(0, 0, worldWidth, worldHeight);
+
+  const drawGrid = (step, color, width) => {
+    const startX = Math.floor(originX / step) * step;
+    const endX = originX + worldWidth;
+    const startY = Math.floor(originY / step) * step;
+    const endY = originY + worldHeight;
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    for (let x = startX; x <= endX; x += step) {
+      const relX = x - originX;
+      ctx.moveTo(relX, 0);
+      ctx.lineTo(relX, worldHeight);
+    }
+    for (let y = startY; y <= endY; y += step) {
+      const relY = y - originY;
+      ctx.moveTo(0, relY);
+      ctx.lineTo(worldWidth, relY);
+    }
+    ctx.stroke();
+  };
+
+  drawGrid(120, "#e2e8f0", 1);
+  drawGrid(24, "#eef2f7", 1);
+
+  for (const edge of state.edges.values()) {
+    const points = getEdgeEndpoints(edge);
+    if (!points) {
+      continue;
+    }
+    const x1 = points.a.x - originX;
+    const y1 = points.a.y - originY;
+    const x2 = points.b.x - originX;
+    const y2 = points.b.y - originY;
+    const dashed = isDashedType(edge.type);
+    const directed = isDirectedType(edge.type);
+
+    ctx.strokeStyle = "#56708f";
+    ctx.lineWidth = 2.4;
+    ctx.setLineDash(dashed ? [9, 6] : []);
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    if (directed) {
+      drawArrowHead(ctx, x1, y1, x2, y2, "#56708f");
+    }
+  }
+
+  for (const [nodeId, node] of state.nodes.entries()) {
+    const x = node.x - originX;
+    const y = node.y - originY;
+    drawRoundedRectPath(ctx, x, y, node.width, node.height, 14);
+    ctx.fillStyle = normalizeCardColor(node.color);
+    ctx.fill();
+    ctx.strokeStyle = "#d2d9e3";
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    const contentEl = state.nodeContentElements.get(nodeId);
+    const text = contentEl ? contentEl.innerText : node.text || "";
+    const align = contentEl ? window.getComputedStyle(contentEl).textAlign : "center";
+    ctx.fillStyle = "#1b1f24";
+    ctx.font = '14px "Avenir Next", Avenir, "Segoe UI", sans-serif';
+    drawWrappedText(ctx, text, x + 12, y + 34, node.width - 24, node.height - 48, align);
+  }
+
+  canvas.toBlob((blob) => {
+    if (!blob) {
+      alert("Bild konnte nicht exportiert werden.");
+      return;
+    }
+    downloadBlob(`mappy-bild-${getFileTimestamp()}.png`, blob);
+  }, "image/png");
 }
 
 function clearConnectSource() {
@@ -1315,6 +1770,56 @@ if (edgeTypeSelect) {
       setEdgeType(state.selectedEdgeId, nextType);
     }
     syncEdgeTypeSelect();
+  });
+}
+
+if (exportDataBtn) {
+  exportDataBtn.addEventListener("click", () => {
+    try {
+      const snapshot = buildSnapshot();
+      const json = JSON.stringify(snapshot, null, 2);
+      const blob = new Blob([json], { type: "application/json" });
+      downloadBlob(`mappy-daten-${getFileTimestamp()}.json`, blob);
+    } catch {
+      alert("Daten konnten nicht exportiert werden.");
+    }
+  });
+}
+
+if (importDataBtn && importFileInput) {
+  importDataBtn.addEventListener("click", () => {
+    importFileInput.value = "";
+    importFileInput.click();
+  });
+
+  importFileInput.addEventListener("change", async () => {
+    const file = importFileInput.files && importFileInput.files[0];
+    importFileInput.value = "";
+    if (!file) {
+      return;
+    }
+
+    try {
+      const raw = await file.text();
+      const parsed = JSON.parse(raw);
+      importSnapshot(parsed);
+    } catch (error) {
+      if (error instanceof Error && error.message) {
+        alert(`Import fehlgeschlagen: ${error.message}`);
+        return;
+      }
+      alert("Import fehlgeschlagen: Ungültige Datei.");
+    }
+  });
+}
+
+if (exportImageBtn) {
+  exportImageBtn.addEventListener("click", () => {
+    try {
+      exportAsImage();
+    } catch {
+      alert("Bild konnte nicht exportiert werden.");
+    }
   });
 }
 
