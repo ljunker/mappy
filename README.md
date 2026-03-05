@@ -1,15 +1,15 @@
 # Mappy
 
-Mappy ist ein leichtgewichtiges Web-Projekt fuer Mindmaps und freie Diagramme auf einem grossen Canvas.
+Mappy ist ein leichtgewichtiges Web-Projekt für Mindmaps und freie Diagramme auf einem großen Canvas.
 
 ## Features
 
-- Grosser pannbarer und zoombarer Canvas mit Grid-Hintergrund
-- Karten erstellen, verschieben, bearbeiten und loeschen
-- Kartentext standardmaessig zentriert
-- Kartengroesse pro Karte per Ziehen aendern und Kartenfarbe per Kontextmenue waehlen
+- Großer pannbarer und zoombarer Canvas mit Grid-Hintergrund
+- Karten erstellen, verschieben, bearbeiten und löschen
+- Kartentext standardmäßig zentriert
+- Kartengröße pro Karte per Ziehen ändern und Kartenfarbe per Kontextmenü wählen
 - Karten mit verschiedenen Verbindungstypen verbinden (durchgezogen, gestrichelt, gerichtet, gerichtet + gestrichelt)
-- Verbindung auswaehlen und loeschen (Button oder `Entf` / `Backspace`)
+- Verbindung auswählen und löschen (Button oder `Entf` / `Backspace`)
 - Neue, direkt verbundene Karte per Drag vom `+`-Handle einer bestehenden Karte
 
 ## Bedienung
@@ -18,18 +18,18 @@ Mappy ist ein leichtgewichtiges Web-Projekt fuer Mindmaps und freie Diagramme au
 - Mausrad: Zoom
 - `Karte erstellen`: Modus aktivieren und auf den Canvas klicken
 - Karte klicken: Text direkt bearbeiten (zentriert)
-- Beim Editieren erscheint ueber der Karte ein kleines Text-Stilmenue (`B`, `I`, `U`, links/zentriert/rechts)
+- Beim Editieren erscheint über der Karte ein kleines Text-Stilmenü (`B`, `I`, `U`, links/zentriert/rechts)
 - Karte ziehen (Drag & Drop): Karte verschieben
-- Karte unten rechts am Handle ziehen: Groesse aendern
-- Rechtsklick auf Karte: Farb-Kontextmenue mit Preset-Farben
-- Verbindungstyp in der Toolbar waehlen
-- `Verbinden`: erste Karte klicken, dann zweite Karte klicken (mit gewaehltem Typ)
+- Karte unten rechts am Handle ziehen: Größe ändern
+- Rechtsklick auf Karte: Farb-Kontextmenü mit Preset-Farben
+- Verbindungstyp in der Toolbar wählen
+- `Verbinden`: erste Karte klicken, dann zweite Karte klicken (mit gewähltem Typ)
 - `+` an einer Karte ziehen und loslassen: neue verbundene Karte erstellen
-- Verbindung anklicken: Verbindung auswaehlen
-- Verbindungstyp waehrend Auswahl aendern: Dropdown in der Toolbar
-- `Entf` oder `Backspace`: ausgewaehlte Verbindung loeschen
+- Verbindung anklicken: Verbindung auswählen
+- Verbindungstyp während Auswahl ändern: Dropdown in der Toolbar
+- `Entf` oder `Backspace`: ausgewählte Verbindung löschen
 - `ESC`: aktiven Modus verlassen
-- `Ansicht zentrieren`: Kamera zur Mitte zuruecksetzen
+- `Ansicht zentrieren`: Kamera zur Mitte zurücksetzen
 
 ## Projektstruktur
 
@@ -41,5 +41,5 @@ Mappy ist ein leichtgewichtiges Web-Projekt fuer Mindmaps und freie Diagramme au
 
 Da es eine Vanilla-Web-App ohne Build-Schritt ist, reicht eine statische Auslieferung:
 
-1. Einfach `index.html` im Browser oeffnen
+1. Einfach `index.html` im Browser öffnen
 2. Oder einen lokalen Static Server starten (z. B. `python3 -m http.server 5173`) und `http://localhost:5173` aufrufen
